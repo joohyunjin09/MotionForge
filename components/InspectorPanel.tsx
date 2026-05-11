@@ -45,13 +45,6 @@ function SelectField<T extends string>({ label, value, options, onChange }: { la
 export function InspectorPanel({
   node,
   viewport,
-  canDelete,
-  canDuplicate,
-  canMoveUp,
-  canMoveDown,
-  onDuplicate,
-  onDelete,
-  onMove,
   onStyleChange,
   onPropsChange,
   onAnimationChange,
@@ -59,13 +52,6 @@ export function InspectorPanel({
 }: {
   node: ElementNode | null;
   viewport: Viewport;
-  canDelete: boolean;
-  canDuplicate: boolean;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  onDuplicate: () => void;
-  onDelete: () => void;
-  onMove: (direction: "up" | "down") => void;
   onStyleChange: (patch: Partial<StyleConfig>) => void;
   onPropsChange: (patch: Partial<ElementNode["props"]>) => void;
   onAnimationChange: (patch: Partial<AnimationConfig>) => void;
@@ -87,24 +73,6 @@ export function InspectorPanel({
       </div>
 
       <div className="grid gap-4">
-        <section className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 font-semibold text-slate-950">Selected Element Actions</h3>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={onDuplicate} disabled={!canDuplicate} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-cyan-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">
-              Duplicate
-            </button>
-            <button type="button" onClick={onDelete} disabled={!canDelete} className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40">
-              Delete
-            </button>
-            <button type="button" onClick={() => onMove("up")} disabled={!canMoveUp} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-cyan-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">
-              Move Up
-            </button>
-            <button type="button" onClick={() => onMove("down")} disabled={!canMoveDown} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-cyan-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">
-              Move Down
-            </button>
-          </div>
-          {!canDelete && <p className="mt-3 text-xs text-slate-500">The root section can be edited, but it cannot be deleted, duplicated, or moved.</p>}
-        </section>
         {canEditText && (
           <section className="rounded-2xl border border-slate-200 bg-white p-4">
             <h3 className="mb-3 font-semibold text-slate-950">Content</h3>

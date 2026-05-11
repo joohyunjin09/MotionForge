@@ -20,6 +20,17 @@ export type StyleConfig = {
   opacity?: number;
   zIndex?: number;
   overflow?: "visible" | "hidden";
+  customClassName?: string;
+  maxWidth?: string;
+  minHeight?: string;
+  height?: string;
+  insetTop?: string;
+  insetRight?: string;
+  insetBottom?: string;
+  insetLeft?: string;
+  border?: string;
+  shadow?: string;
+  gridColumns?: string;
 };
 
 export type AnimationConfig = {

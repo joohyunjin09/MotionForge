@@ -60,6 +60,10 @@ export function MotionForgeApp() {
     updateSelectedNode((node) => ({ ...node, props: { ...node.props, ...patch } }));
   };
 
+  const handleNameChange = (name: string) => {
+    updateSelectedNode((node) => ({ ...node, name }));
+  };
+
   const handleAnimationChange = (patch: Partial<AnimationConfig>) => {
     updateSelectedNode((node) => ({
       ...node,
@@ -140,6 +144,7 @@ export function MotionForgeApp() {
           onDuplicate={handleDuplicateSelected}
           onDelete={handleDeleteSelected}
           onMove={handleMoveSelected}
+          onNameChange={handleNameChange}
           onStyleChange={handleStyleChange}
           onPropsChange={handlePropsChange}
           onAnimationChange={handleAnimationChange}

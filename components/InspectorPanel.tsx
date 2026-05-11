@@ -43,6 +43,29 @@ function SelectField<T extends string>({ label, value, options, onChange }: { la
   );
 }
 
+const emptyToUndefined = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+function TextInputField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <input className={inputClass} value={value ?? ""} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+    </Field>
+  );
+}
+
 function ActionButton({
   children,
   disabled,
@@ -81,6 +104,7 @@ export function InspectorPanel({
   onDuplicate,
   onDelete,
   onMove,
+  onNameChange,
   onStyleChange,
   onPropsChange,
   onAnimationChange,
@@ -95,6 +119,7 @@ export function InspectorPanel({
   onDuplicate: () => void;
   onDelete: () => void;
   onMove: (direction: MoveDirection) => void;
+  onNameChange: (name: string) => void;
   onStyleChange: (patch: Partial<StyleConfig>) => void;
   onPropsChange: (patch: Partial<ElementNode["props"]>) => void;
   onAnimationChange: (patch: Partial<AnimationConfig>) => void;
@@ -142,6 +167,42 @@ export function InspectorPanel({
             </Field>
           </section>
         )}
+
+        <details className="rounded-2xl border border-slate-200 bg-white p-4" open>
+          <summary className="cursor-pointer select-none font-semibold text-slate-950">Advanced Style</summary>
+          <p className="mt-1 text-xs text-slate-500">Use Tailwind utilities or raw values such as 1200px, 80vh, 20px, or repeat(3,minmax(0,1fr)).</p>
+          <div className="mt-4 grid gap-3">
+            <TextInputField label="Element name" value={node.name} onChange={onNameChange} />
+            <Field label="Custom Tailwind classes">
+              <textarea
+                className={`${inputClass} min-h-20 resize-y`}
+                value={style.customClassName ?? ""}
+                placeholder="ring-1 ring-cyan-300/40 backdrop-blur"
+                onChange={(event) => onStyleChange({ customClassName: emptyToUndefined(event.target.value) })}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <TextInputField label="Max width" value={style.maxWidth} placeholder="1200px or max-w-6xl" onChange={(value) => onStyleChange({ maxWidth: emptyToUndefined(value) })} />
+              <TextInputField label="Min height" value={style.minHeight} placeholder="80vh or min-h-screen" onChange={(value) => onStyleChange({ minHeight: emptyToUndefined(value) })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <TextInputField label="Height" value={style.height} placeholder="400px or h-full" onChange={(value) => onStyleChange({ height: emptyToUndefined(value) })} />
+              <TextInputField label="Grid columns" value={style.gridColumns} placeholder="repeat(3,minmax(0,1fr))" onChange={(value) => onStyleChange({ gridColumns: emptyToUndefined(value) })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <TextInputField label="Top" value={style.insetTop} placeholder="20px or top-4" onChange={(value) => onStyleChange({ insetTop: emptyToUndefined(value) })} />
+              <TextInputField label="Right" value={style.insetRight} placeholder="10% or right-0" onChange={(value) => onStyleChange({ insetRight: emptyToUndefined(value) })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <TextInputField label="Bottom" value={style.insetBottom} placeholder="auto or bottom-8" onChange={(value) => onStyleChange({ insetBottom: emptyToUndefined(value) })} />
+              <TextInputField label="Left" value={style.insetLeft} placeholder="10% or left-0" onChange={(value) => onStyleChange({ insetLeft: emptyToUndefined(value) })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <TextInputField label="Border class" value={style.border} placeholder="border border-slate-200" onChange={(value) => onStyleChange({ border: emptyToUndefined(value) })} />
+              <TextInputField label="Shadow class" value={style.shadow} placeholder="shadow-xl shadow-slate-950/10" onChange={(value) => onStyleChange({ shadow: emptyToUndefined(value) })} />
+            </div>
+          </div>
+        </details>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4">
           <div className="mb-4 flex items-start justify-between gap-3">

@@ -6,6 +6,10 @@ function escapeText(value = "") {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function escapeAttribute(value = "") {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
 function indent(level: number) {
   return "  ".repeat(level);
 }
@@ -53,7 +57,7 @@ function renderVisualBlock(level: number) {
 
 export function renderElementNode(node: ElementNode, viewport: Viewport = "desktop", level = 0): string {
   const tag = tagForType(node.type);
-  const className = styleConfigToTailwindClasses(getResolvedStyles(node, viewport));
+  const className = escapeAttribute(styleConfigToTailwindClasses(getResolvedStyles(node, viewport)));
   const attrs = `className="${className}" data-motion-id="${node.id}"`;
   const children = node.children.map((child) => renderElementNode(child, viewport, level + 1)).join("\n");
 
@@ -71,7 +75,7 @@ export function renderElementNode(node: ElementNode, viewport: Viewport = "deskt
 
 function renderExportNode(node: ElementNode, level = 2): string {
   const tag = tagForType(node.type);
-  const className = responsiveClassName(node);
+  const className = escapeAttribute(responsiveClassName(node));
   const attrs = `className="${className}" data-motion-id="${node.id}"`;
   const children = node.children.map((child) => renderExportNode(child, level + 1)).join("\n");
 

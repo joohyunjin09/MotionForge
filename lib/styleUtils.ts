@@ -82,6 +82,16 @@ const opacityClass = (opacity?: number) => {
 
 const zIndexClass = (zIndex?: number) => (zIndex === undefined ? "" : `z-[${zIndex}]`);
 
+const arbitraryOrUtilityClass = (value: string | undefined, prefix: string) => {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith(`${prefix}-`)) return trimmed;
+  return `${prefix}-[${trimmed}]`;
+};
+
+const passthroughClass = (value?: string) => value?.trim() ?? "";
+
 export function getResolvedStyles(node: ElementNode, viewport: Viewport): StyleConfig {
   if (viewport === "desktop") return { ...node.styles.desktop };
   return {
@@ -98,10 +108,20 @@ export function styleConfigToTailwindClasses(style: StyleConfig): string {
     style.alignItems ? alignClass[style.alignItems] : "",
     style.position ? positionClass[style.position] : "",
     style.width ? widthClass[style.width] : "",
+    arbitraryOrUtilityClass(style.maxWidth, "max-w"),
+    arbitraryOrUtilityClass(style.minHeight, "min-h"),
+    arbitraryOrUtilityClass(style.height, "h"),
+    arbitraryOrUtilityClass(style.insetTop, "top"),
+    arbitraryOrUtilityClass(style.insetRight, "right"),
+    arbitraryOrUtilityClass(style.insetBottom, "bottom"),
+    arbitraryOrUtilityClass(style.insetLeft, "left"),
+    style.gridColumns ? arbitraryOrUtilityClass(style.gridColumns, "grid-cols") : "",
     style.padding,
     style.margin,
     style.gap,
     style.borderRadius,
+    passthroughClass(style.border),
+    passthroughClass(style.shadow),
     style.fontSize,
     style.fontWeight,
     style.background,
@@ -109,6 +129,7 @@ export function styleConfigToTailwindClasses(style: StyleConfig): string {
     opacityClass(style.opacity),
     zIndexClass(style.zIndex),
     style.overflow ? `overflow-${style.overflow}` : "",
+    passthroughClass(style.customClassName),
   ];
 
   return classes.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();

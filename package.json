@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "15.3.4",
+    "gsap": "3.12.5",
+    "next": "^15.3.6",
     "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "gsap": "3.12.5"
+    "react-dom": "19.0.0"
   },
   "devDependencies": {
     "@types/node": "22.10.2",

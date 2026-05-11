@@ -55,14 +55,13 @@ export function renderElementNode(node: ElementNode, viewport: Viewport = "deskt
   const tag = tagForType(node.type);
   const className = styleConfigToTailwindClasses(getResolvedStyles(node, viewport));
   const attrs = `className="${className}" data-motion-id="${node.id}"`;
-  const children = node.children.map((child) => renderElementNode(child, viewport, level + 1)).join("\n");
 
   if (node.type === "image") {
-    const inner = [renderVisualBlock(level + 1), children].filter(Boolean).join("\n");
-    return `${indent(level)}<${tag} ${attrs}>\n${inner}\n${indent(level)}</${tag}>`;
+    return `${indent(level)}<${tag} ${attrs}>\n${renderVisualBlock(level + 1)}\n${indent(level)}</${tag}>`;
   }
 
   const text = escapeText(node.props.text);
+  const children = node.children.map((child) => renderElementNode(child, viewport, level + 1)).join("\n");
   const inner = [text ? `${indent(level + 1)}${text}` : "", children].filter(Boolean).join("\n");
 
   if (!inner) return `${indent(level)}<${tag} ${attrs} />`;
@@ -73,14 +72,13 @@ function renderExportNode(node: ElementNode, level = 2): string {
   const tag = tagForType(node.type);
   const className = responsiveClassName(node);
   const attrs = `className="${className}" data-motion-id="${node.id}"`;
-  const children = node.children.map((child) => renderExportNode(child, level + 1)).join("\n");
 
   if (node.type === "image") {
-    const inner = [renderVisualBlock(level + 1), children].filter(Boolean).join("\n");
-    return `${indent(level)}<${tag} ${attrs}>\n${inner}\n${indent(level)}</${tag}>`;
+    return `${indent(level)}<${tag} ${attrs}>\n${renderVisualBlock(level + 1)}\n${indent(level)}</${tag}>`;
   }
 
   const text = escapeText(node.props.text);
+  const children = node.children.map((child) => renderExportNode(child, level + 1)).join("\n");
   const inner = [text ? `${indent(level + 1)}${text}` : "", children].filter(Boolean).join("\n");
   return `${indent(level)}<${tag} ${attrs}>\n${inner}\n${indent(level)}</${tag}>`;
 }

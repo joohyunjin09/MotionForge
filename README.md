@@ -6,9 +6,8 @@ MotionForge is an MVP visual section builder for developers. It lets you select 
 
 - Next.js App Router + TypeScript + Tailwind CSS
 - Tree-based hero section model
-- Element Builder v0.2 for adding, duplicating, deleting, and reordering nodes
 - Desktop, tablet, and mobile viewport editing layers
-- Improved element tree with type badges, indentation guides, quick-add controls, and live canvas highlighting
+- Element tree selection and live canvas highlighting
 - Inspector controls for layout, typography, color, opacity, z-index, and overflow
 - GSAP animation controls for page-load, scroll-enter, and hover triggers
 - Suggest Mobile Layout action for quick responsive defaults

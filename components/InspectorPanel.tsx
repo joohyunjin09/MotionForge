@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { AnimationConfig, ElementNode, StyleConfig, Viewport } from "@/lib/types";
+import type { MoveDirection } from "@/lib/treeUtils";
 import {
   alignOptions,
   backgroundOptions,
@@ -42,9 +43,44 @@ function SelectField<T extends string>({ label, value, options, onChange }: { la
   );
 }
 
+function ActionButton({
+  children,
+  disabled,
+  tone = "neutral",
+  onClick,
+}: {
+  children: ReactNode;
+  disabled: boolean;
+  tone?: "neutral" | "danger";
+  onClick: () => void;
+}) {
+  const toneClass =
+    tone === "danger"
+      ? "border-rose-200 text-rose-600 hover:border-rose-300 hover:bg-rose-50"
+      : "border-slate-200 text-slate-700 hover:border-cyan-300 hover:text-slate-950";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${toneClass}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function InspectorPanel({
   node,
   viewport,
+  canDelete,
+  canDuplicate,
+  canMoveUp,
+  canMoveDown,
+  onDuplicate,
+  onDelete,
+  onMove,
   onStyleChange,
   onPropsChange,
   onAnimationChange,
@@ -52,6 +88,13 @@ export function InspectorPanel({
 }: {
   node: ElementNode | null;
   viewport: Viewport;
+  canDelete: boolean;
+  canDuplicate: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onMove: (direction: MoveDirection) => void;
   onStyleChange: (patch: Partial<StyleConfig>) => void;
   onPropsChange: (patch: Partial<ElementNode["props"]>) => void;
   onAnimationChange: (patch: Partial<AnimationConfig>) => void;
@@ -73,6 +116,24 @@ export function InspectorPanel({
       </div>
 
       <div className="grid gap-4">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 className="mb-3 font-semibold text-slate-950">Selected Element Actions</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <ActionButton onClick={onDuplicate} disabled={!canDuplicate}>
+              Duplicate
+            </ActionButton>
+            <ActionButton onClick={onDelete} disabled={!canDelete} tone="danger">
+              Delete
+            </ActionButton>
+            <ActionButton onClick={() => onMove("up")} disabled={!canMoveUp}>
+              Move Up
+            </ActionButton>
+            <ActionButton onClick={() => onMove("down")} disabled={!canMoveDown}>
+              Move Down
+            </ActionButton>
+          </div>
+          {!canDelete && <p className="mt-3 text-xs text-slate-500">The root section can be edited, but it cannot be deleted, duplicated, or moved.</p>}
+        </section>
         {canEditText && (
           <section className="rounded-2xl border border-slate-200 bg-white p-4">
             <h3 className="mb-3 font-semibold text-slate-950">Content</h3>

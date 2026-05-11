@@ -14,6 +14,12 @@ MotionForge is an MVP visual section builder for developers. It lets you select 
 - Export modal with generated React component and GSAP logic
 - Reset back to the default hero section
 
+## Element Builder v0.2
+
+Use the left sidebar to add Div, Heading, Paragraph, Button, or Image placeholder nodes. If the selected element can contain children (`section`, `div`, or `image`), new nodes are inserted as children; otherwise they are inserted as siblings immediately after the selected node.
+
+Use **Selected Element Actions** in the inspector to duplicate, delete, or move the selected node among siblings. The root section cannot be deleted, and duplicated nodes receive fresh IDs recursively so exported code remains valid.
+
 ## Running locally
 
 ```bash

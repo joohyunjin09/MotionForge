@@ -5,7 +5,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import type { AnimationConfig, ElementNode, Viewport } from "@/lib/types";
 import { flattenTree } from "@/lib/treeUtils";
-import { getResolvedStyles, styleConfigToTailwindClasses } from "@/lib/styleUtils";
+import { getResolvedStyles, styleConfigToInlineStyle, styleConfigToTailwindClasses } from "@/lib/styleUtils";
 
 const viewportWidths: Record<Viewport, number> = {
   desktop: 1200,
@@ -49,12 +49,15 @@ function VisualBlock() {
 function PreviewNode({ node, viewport, selectedId, onSelect }: { node: ElementNode; viewport: Viewport; selectedId: string; onSelect: (id: string) => void }) {
   const Tag = node.type === "section" ? "section" : node.type === "heading" ? "h1" : node.type === "paragraph" ? "p" : node.type === "button" ? "button" : "div";
   const isSelected = selectedId === node.id;
-  const className = styleConfigToTailwindClasses(getResolvedStyles(node, viewport));
+  const resolvedStyle = getResolvedStyles(node, viewport);
+  const className = styleConfigToTailwindClasses(resolvedStyle);
+  const inlineStyle = styleConfigToInlineStyle(resolvedStyle);
   const selectedClass = isSelected ? "outline outline-2 outline-offset-2 outline-cyan-400" : "outline outline-1 outline-transparent hover:outline-cyan-200";
 
   return (
     <Tag
       className={`${className} ${selectedClass} transition-[outline-color]`}
+      style={inlineStyle}
       data-motion-id={node.id}
       onClick={(event) => {
         event.stopPropagation();

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { ElementNode, StyleConfig, Viewport } from "./types";
 
 export const viewports: Viewport[] = ["desktop", "tablet", "mobile"];
@@ -60,9 +61,9 @@ const alignClass: Record<string, string> = {
 const positionClass: Record<NonNullable<StyleConfig["position"]>, string> = {
   static: "static",
   relative: "relative",
-  absolute: "absolute inset-0",
-  fixed: "fixed inset-0",
-  sticky: "sticky top-0",
+  absolute: "absolute",
+  fixed: "fixed",
+  sticky: "sticky",
 };
 
 const widthClass: Record<NonNullable<StyleConfig["width"]>, string> = {
@@ -92,11 +93,35 @@ const arbitraryOrUtilityClass = (value: string | undefined, prefix: string) => {
 
 const passthroughClass = (value?: string) => value?.trim() ?? "";
 
+const isTailwindUtilityValue = (value: string | undefined, prefix: string) => {
+  const trimmed = value?.trim();
+  return Boolean(trimmed && trimmed.startsWith(`${prefix}-`));
+};
+
+const rawInlineValue = (value: string | undefined, prefix: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed || isTailwindUtilityValue(trimmed, prefix)) return undefined;
+  return trimmed;
+};
+
 export function getResolvedStyles(node: ElementNode, viewport: Viewport): StyleConfig {
   if (viewport === "desktop") return { ...node.styles.desktop };
   return {
     ...node.styles.desktop,
     ...(node.styles[viewport] ?? {}),
+  };
+}
+
+export function styleConfigToInlineStyle(style: StyleConfig): CSSProperties {
+  return {
+    maxWidth: rawInlineValue(style.maxWidth, "max-w"),
+    minHeight: rawInlineValue(style.minHeight, "min-h"),
+    height: rawInlineValue(style.height, "h"),
+    top: rawInlineValue(style.insetTop, "top"),
+    right: rawInlineValue(style.insetRight, "right"),
+    bottom: rawInlineValue(style.insetBottom, "bottom"),
+    left: rawInlineValue(style.insetLeft, "left"),
+    gridTemplateColumns: rawInlineValue(style.gridColumns, "grid-cols"),
   };
 }
 

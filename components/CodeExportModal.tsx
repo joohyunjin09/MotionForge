@@ -25,11 +25,11 @@ export function CodeExportModal({ tree, onClose }: { tree: ElementNode; onClose:
                 Copy React Code
               </button>
             </div>
-            <pre className="overflow-auto rounded-2xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100 motionforge-scrollbar"><code>{reactCode}</code></pre>
+            <pre data-testid="react-code" className="overflow-auto rounded-2xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100 motionforge-scrollbar"><code>{reactCode}</code></pre>
           </section>
           <section className="min-h-0 overflow-auto border-l border-slate-200 bg-slate-50 p-5 motionforge-scrollbar">
             <h3 className="mb-3 font-semibold text-slate-950">GSAP logic only</h3>
-            <pre className="overflow-auto rounded-2xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-100 motionforge-scrollbar"><code>{gsapCode}</code></pre>
+            <pre data-testid="gsap-code" className="overflow-auto rounded-2xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-100 motionforge-scrollbar"><code>{gsapCode}</code></pre>
           </section>
         </div>
       </div>

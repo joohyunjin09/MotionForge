@@ -25,11 +25,25 @@ export const backgroundOptions = [
   "bg-blue-600",
   "bg-gradient-to-br from-cyan-300 via-blue-400 to-violet-500",
 ];
-export const textColorOptions = ["text-slate-950", "text-slate-700", "text-slate-300", "text-white", "text-cyan-300", "text-center text-white", "text-center text-slate-300"];
+export const textColorOptions = ["text-slate-950", "text-slate-700", "text-slate-300", "text-white", "text-cyan-300"];
+export const textAlignOptions = ["left", "center", "right", "justify"] as const;
+export const lineHeightOptions = ["leading-none", "leading-tight", "leading-snug", "leading-normal", "leading-relaxed", "leading-loose"];
+export const letterSpacingOptions = ["tracking-tighter", "tracking-tight", "tracking-normal", "tracking-wide", "tracking-wider", "tracking-widest"];
+export const textTransformOptions = ["normal-case", "uppercase", "lowercase", "capitalize"] as const;
+export const aspectRatioOptions = ["aspect-auto", "aspect-square", "aspect-video"];
+export const objectFitOptions = ["contain", "cover", "fill", "none", "scale-down"] as const;
+export const objectPositionOptions = ["center", "top", "bottom", "left", "right"] as const;
+export const whiteSpaceOptions = ["normal", "nowrap", "pre-line", "pre-wrap"] as const;
 export const overflowOptions = ["visible", "hidden"] as const;
 export const animationTypeOptions = ["none", "fade-in", "slide-up", "slide-left", "scale-in", "blur-in"] as const;
 export const triggerOptions = ["page-load", "scroll-enter", "hover"] as const;
-export const easeOptions = ["power2.out", "power3.out", "back.out", "ease-out"];
+export const easeOptions = ["power1.out", "power2.out", "power3.out", "power4.out", "back.out", "back.out(1.7)", "elastic.out(1, 0.3)", "expo.out", "ease-out", "none"];
+export const animationModeOptions = ["tween", "scroll", "flip"] as const;
+export const transformOriginOptions = ["center center", "top left", "top center", "top right", "center left", "center right", "bottom left", "bottom center", "bottom right"];
+export const toggleActionsOptions = ["play none none none", "play reverse play reverse", "restart none none none", "restart pause resume reset", "play pause resume reset"];
+export const scrollStartOptions = ["top bottom", "top 80%", "top center", "center center", "bottom bottom"];
+export const scrollEndOptions = ["bottom top", "bottom center", "+=300", "+=500", "+=1000"];
+export const flipPresetOptions = ["none", "expand", "swap", "reorder", "card-pop"] as const;
 
 const displayClass: Record<NonNullable<StyleConfig["display"]>, string> = {
   block: "block",
@@ -75,6 +89,36 @@ const widthClass: Record<NonNullable<StyleConfig["width"]>, string> = {
   "2/3": "w-2/3",
 };
 
+const textAlignClass: Record<NonNullable<StyleConfig["textAlign"]>, string> = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+  justify: "text-justify",
+};
+
+const objectFitClass: Record<NonNullable<StyleConfig["objectFit"]>, string> = {
+  contain: "object-contain",
+  cover: "object-cover",
+  fill: "object-fill",
+  none: "object-none",
+  "scale-down": "object-scale-down",
+};
+
+const objectPositionClass: Record<NonNullable<StyleConfig["objectPosition"]>, string> = {
+  center: "object-center",
+  top: "object-top",
+  bottom: "object-bottom",
+  left: "object-left",
+  right: "object-right",
+};
+
+const whiteSpaceClass: Record<NonNullable<StyleConfig["whiteSpace"]>, string> = {
+  normal: "whitespace-normal",
+  nowrap: "whitespace-nowrap",
+  "pre-line": "whitespace-pre-line",
+  "pre-wrap": "whitespace-pre-wrap",
+};
+
 const opacityClass = (opacity?: number) => {
   if (opacity === undefined || opacity >= 1) return "";
   if (opacity <= 0) return "opacity-0";
@@ -89,6 +133,13 @@ const arbitraryOrUtilityClass = (value: string | undefined, prefix: string) => {
   if (!trimmed) return "";
   if (trimmed.startsWith(`${prefix}-`)) return trimmed;
   return `${prefix}-[${trimmed}]`;
+};
+
+const aspectRatioClass = (value: string | undefined) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("aspect-")) return trimmed;
+  return `aspect-[${trimmed.replace(/\s*\/\s*/g, "/").replace(/\s+/g, "_")}]`;
 };
 
 const passthroughClass = (value?: string) => value?.trim() ?? "";
@@ -122,12 +173,15 @@ export function styleConfigToInlineStyle(style: StyleConfig): CSSProperties {
     bottom: rawInlineValue(style.insetBottom, "bottom"),
     left: rawInlineValue(style.insetLeft, "left"),
     gridTemplateColumns: rawInlineValue(style.gridColumns, "grid-cols"),
+    aspectRatio: rawInlineValue(style.aspectRatio, "aspect"),
   };
 }
 
 export function styleConfigToTailwindClasses(style: StyleConfig): string {
+  const displayUtility = style.display === "grid" && style.gridColumns ? "grid" : style.display ? displayClass[style.display] : "";
+
   const classes = [
-    style.display ? displayClass[style.display] : "",
+    displayUtility,
     style.display === "flex" && style.flexDirection ? flexDirectionClass[style.flexDirection] : "",
     style.justifyContent ? justifyClass[style.justifyContent] : "",
     style.alignItems ? alignClass[style.alignItems] : "",
@@ -151,6 +205,14 @@ export function styleConfigToTailwindClasses(style: StyleConfig): string {
     style.fontWeight,
     style.background,
     style.textColor,
+    style.textAlign ? textAlignClass[style.textAlign] : "",
+    passthroughClass(style.lineHeight),
+    passthroughClass(style.letterSpacing),
+    style.textTransform,
+    aspectRatioClass(style.aspectRatio),
+    style.objectFit ? objectFitClass[style.objectFit] : "",
+    style.objectPosition ? objectPositionClass[style.objectPosition] : "",
+    style.whiteSpace ? whiteSpaceClass[style.whiteSpace] : "",
     opacityClass(style.opacity),
     zIndexClass(style.zIndex),
     style.overflow ? `overflow-${style.overflow}` : "",

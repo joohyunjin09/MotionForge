@@ -89,7 +89,7 @@ function renderExportNode(node: ElementNode, level = 2): string {
   return `${indent(level)}<${tag} ${attrs}>\n${inner}\n${indent(level)}</${tag}>`;
 }
 
-function animationFromConfig(animation: AnimationConfig) {
+function presetFromConfig(animation: AnimationConfig) {
   switch (animation.type) {
     case "fade-in":
       return { opacity: 0 };
@@ -106,10 +106,118 @@ function animationFromConfig(animation: AnimationConfig) {
   }
 }
 
+function hasNumber(value: number | undefined) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function animationFromConfig(animation: AnimationConfig) {
+  const from = { ...(presetFromConfig(animation) ?? {}) } as Record<string, number | string>;
+
+  if (hasNumber(animation.x)) from.x = animation.x!;
+  if (hasNumber(animation.y)) from.y = animation.y!;
+  if (hasNumber(animation.rotate)) from.rotate = animation.rotate!;
+  if (hasNumber(animation.scale)) from.scale = animation.scale!;
+  if (hasNumber(animation.opacity)) from.opacity = animation.opacity!;
+  if (hasNumber(animation.blur)) from.filter = `blur(${animation.blur}px)`;
+
+  return Object.keys(from).length > 0 ? from : null;
+}
+
+function usesScrollTrigger(animation: AnimationConfig) {
+  return animation.mode === "scroll" || animation.trigger === "scroll-enter";
+}
+
+function usesFlip(animation: AnimationConfig) {
+  return animation.mode === "flip";
+}
+
+function isAnimatedNode(node: ElementNode) {
+  const animation = node.animation;
+  if (!animation) return false;
+  if (usesFlip(animation)) return true;
+  return animation.type !== "none" || animationFromConfig(animation) !== null;
+}
+
 export function generateGSAPCode(tree: ElementNode): string {
-  const animated = flattenTree(tree).filter((node) => node.animation && node.animation.type !== "none");
-  const usesScrollTrigger = animated.some((node) => node.animation?.trigger === "scroll-enter");
-  const configs = animated.map((node) => ({ id: node.id, ...node.animation, from: animationFromConfig(node.animation!) }));
+  const animated = flattenTree(tree).filter(isAnimatedNode);
+  const needsScrollTrigger = animated.some((node) => node.animation && usesScrollTrigger(node.animation));
+  const needsFlip = animated.some((node) => node.animation && usesFlip(node.animation));
+  const pluginRegistration = [needsScrollTrigger ? "ScrollTrigger" : "", needsFlip ? "Flip" : ""].filter(Boolean).join(", ");
+  const configs = animated.map((node) => {
+    const animation = node.animation!;
+    return {
+      id: node.id,
+      ...animation,
+      mode: animation.mode ?? "tween",
+      from: animationFromConfig(animation),
+    };
+  });
+  const flipHelpers = needsFlip
+    ? `
+  type FlipOriginalStyle = { transform: string; boxShadow: string; zIndex: string };
+
+  const flipVars = (config: MotionConfig) => ({
+    duration: config.duration,
+    ease: config.ease,
+    absolute: config.flipAbsolute || undefined,
+    scale: config.flipScale,
+    simple: config.flipSimple || undefined,
+    fade: config.flipFade || undefined,
+    props: config.flipProps || undefined,
+  });
+
+  const applyFlipState = (target: HTMLElement, config: MotionConfig, original: FlipOriginalStyle) => {
+    const active = target.dataset.motionFlipActive === "true";
+    target.dataset.motionFlipActive = active ? "false" : "true";
+
+    if (active) {
+      target.style.transform = original.transform;
+      target.style.boxShadow = original.boxShadow;
+      target.style.zIndex = original.zIndex;
+      return;
+    }
+
+    if (config.flipPreset === "card-pop") {
+      target.style.transform = "scale(1.08) translateY(-8px)";
+      target.style.boxShadow = "0 24px 70px rgba(15, 23, 42, 0.28)";
+      target.style.zIndex = "50";
+      return;
+    }
+
+    target.style.transform = "scale(1.06)";
+    target.style.zIndex = "40";
+  };
+`
+    : "";
+  const flipBranch = needsFlip
+    ? `
+      if (config.mode === "flip") {
+        // Flip needs an explicit state change. This export uses click as a small starter interaction.
+        if (config.flipPreset === "none" || config.flipPreset === "swap" || config.flipPreset === "reorder") return;
+
+        const original = {
+          transform: target.style.transform,
+          boxShadow: target.style.boxShadow,
+          zIndex: target.style.zIndex,
+        };
+        const runFlip = () => {
+          const state = Flip.getState(target);
+          applyFlipState(target, config, original);
+          Flip.from(state, flipVars(config));
+        };
+
+        target.addEventListener("click", runFlip);
+        cleanups.push(() => {
+          target.removeEventListener("click", runFlip);
+          target.style.transform = original.transform;
+          target.style.boxShadow = original.boxShadow;
+          target.style.zIndex = original.zIndex;
+          delete target.dataset.motionFlipActive;
+        });
+        return;
+      }
+`
+    : "";
 
   return `const motionConfigs = ${JSON.stringify(configs, null, 2)};
 
@@ -117,45 +225,133 @@ useEffect(() => {
   const root = rootRef.current;
   if (!root) return;
 
-${usesScrollTrigger ? "  gsap.registerPlugin(ScrollTrigger);\n" : ""}  const ctx = gsap.context(() => {
-    motionConfigs.forEach((config) => {
-      const target = root.querySelector(\`[data-motion-id="\${config.id}"]\`);
-      if (!target || !config.from) return;
+${pluginRegistration ? `  gsap.registerPlugin(${pluginRegistration});\n` : ""}  const cleanups: Array<() => void> = [];
+  type MotionConfig = {
+    id: string;
+    mode?: "tween" | "scroll" | "flip";
+    type?: string;
+    trigger?: string;
+    duration?: number;
+    delay?: number;
+    ease?: string;
+    stagger?: number;
+    repeat?: number;
+    yoyo?: boolean;
+    transformOrigin?: string;
+    triggerTargetId?: string;
+    interactionTargetId?: string;
+    scrollStart?: string;
+    scrollEnd?: string;
+    scrollDistance?: string;
+    scrollSceneHeight?: string;
+    scrub?: boolean | number;
+    pin?: boolean;
+    markers?: boolean;
+    once?: boolean;
+    toggleActions?: string;
+    flipPreset?: "none" | "expand" | "swap" | "reorder" | "card-pop";
+    flipAbsolute?: boolean;
+    flipScale?: boolean;
+    flipSimple?: boolean;
+    flipFade?: boolean;
+    flipProps?: string;
+    from?: Record<string, number | string> | null;
+  };
+  const configs = motionConfigs as MotionConfig[];
 
-      const tweenVars = {
-        ...config.from,
-        duration: config.duration,
-        delay: config.delay,
-        ease: config.ease,
-        stagger: config.stagger || undefined,
+  const tweenVars = (config: MotionConfig) => ({
+    duration: config.duration,
+    delay: config.delay,
+    ease: config.ease,
+    stagger: config.stagger || undefined,
+    repeat: config.repeat ?? undefined,
+    yoyo: config.yoyo || undefined,
+    transformOrigin: config.transformOrigin || undefined,
+  });
+
+  const normalizeScrollEnd = (value?: string) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return undefined;
+    return /^\\d+(?:\\.\\d+)?$/.test(trimmed) ? \`+=\${trimmed}\` : trimmed;
+  };
+
+  const resolveScrollTriggerTarget = (config: MotionConfig, target: HTMLElement) => {
+    const triggerTargetId = config.triggerTargetId || "self";
+    if (triggerTargetId === "self") return target;
+    if (triggerTargetId === "parent") return target.parentElement || target;
+    if (triggerTargetId === "root" || triggerTargetId === "canvas") {
+      return root.querySelector<HTMLElement>(\`[data-motion-id="\${motionConfigs[0]?.id}"]\`) || root;
+    }
+    return root.querySelector<HTMLElement>(\`[data-motion-id="\${triggerTargetId}"]\`) || target;
+  };
+
+  // MotionForge preview uses the canvas as a custom scroller. Exported code uses page scroll by default.
+  const scrollTriggerVars = (config: MotionConfig, target: Element) => ({
+    trigger: target,
+    start: config.scrollStart || "top 80%",
+    end: config.scrollEnd || normalizeScrollEnd(config.scrollDistance) || "bottom top",
+    scrub: config.scrub === undefined || config.scrub === false ? undefined : config.scrub,
+    pin: config.pin || undefined,
+    markers: config.markers || undefined,
+    once: config.once ?? (config.trigger === "scroll-enter"),
+    toggleActions: config.toggleActions || "play none none none",
+  });
+${flipHelpers}
+
+  const ctx = gsap.context(() => {
+    configs.forEach((config) => {
+      const target = root.querySelector<HTMLElement>(\`[data-motion-id="\${config.id}"]\`);
+      if (!target) return;
+${flipBranch}
+
+      if (!config.from) return;
+
+      const baseTweenVars = tweenVars(config);
+      const toVars = {
+        opacity: 1,
+        x: 0,
+        y: 0,
+        rotate: 0,
+        scale: 1,
+        filter: "blur(0px)",
+        ...baseTweenVars,
       };
 
-      if (config.trigger === "scroll-enter") {
+      if (config.mode === "scroll" || config.trigger === "scroll-enter") {
+        const triggerTarget = resolveScrollTriggerTarget(config, target);
         gsap.from(target, {
-          ...tweenVars,
-          scrollTrigger: { trigger: target, start: "top 80%", once: true },
+          ...config.from,
+          ...baseTweenVars,
+          scrollTrigger: scrollTriggerVars(config, triggerTarget),
         });
       } else if (config.trigger === "hover") {
-        const onEnter = () => gsap.fromTo(target, config.from, { opacity: 1, x: 0, y: 0, scale: 1, filter: "blur(0px)", duration: config.duration, ease: config.ease });
+        const onEnter = () => gsap.fromTo(target, config.from, toVars);
         target.addEventListener("mouseenter", onEnter);
+        cleanups.push(() => target.removeEventListener("mouseenter", onEnter));
       } else {
-        gsap.from(target, tweenVars);
+        gsap.from(target, { ...config.from, ...baseTweenVars });
       }
     });
   }, root);
 
-  return () => ctx.revert();
+  return () => {
+    cleanups.forEach((dispose) => dispose());
+    ctx.revert();
+  };
 }, []);`;
 }
 
 export function generateReactCode(tree: ElementNode): string {
-  const usesScrollTrigger = flattenTree(tree).some((node) => node.animation?.trigger === "scroll-enter" && node.animation.type !== "none");
+  const animated = flattenTree(tree).filter(isAnimatedNode);
+  const needsScrollTrigger = animated.some((node) => node.animation && usesScrollTrigger(node.animation));
+  const needsFlip = animated.some((node) => node.animation && usesFlip(node.animation));
   const imports = [
     "\"use client\";",
     "",
     "import { useEffect, useRef } from \"react\";",
     "import { gsap } from \"gsap\";",
-    usesScrollTrigger ? "import { ScrollTrigger } from \"gsap/ScrollTrigger\";" : "",
+    needsScrollTrigger ? "import { ScrollTrigger } from \"gsap/ScrollTrigger\";" : "",
+    needsFlip ? "import { Flip } from \"gsap/Flip\";" : "",
   ].filter(Boolean).join("\n");
 
   return `${imports}

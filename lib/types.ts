@@ -31,15 +31,50 @@ export type StyleConfig = {
   border?: string;
   shadow?: string;
   gridColumns?: string;
+  textAlign?: "left" | "center" | "right" | "justify";
+  lineHeight?: string;
+  letterSpacing?: string;
+  textTransform?: "normal-case" | "uppercase" | "lowercase" | "capitalize";
+  aspectRatio?: string;
+  objectFit?: "contain" | "cover" | "fill" | "none" | "scale-down";
+  objectPosition?: "center" | "top" | "bottom" | "left" | "right";
+  whiteSpace?: "normal" | "nowrap" | "pre-line" | "pre-wrap";
 };
 
 export type AnimationConfig = {
+  mode?: "tween" | "scroll" | "flip";
   type: "none" | "fade-in" | "slide-up" | "slide-left" | "scale-in" | "blur-in";
   trigger: "page-load" | "scroll-enter" | "hover";
   duration: number;
   delay: number;
   ease: string;
   stagger?: number;
+  x?: number;
+  y?: number;
+  rotate?: number;
+  scale?: number;
+  opacity?: number;
+  blur?: number;
+  transformOrigin?: string;
+  repeat?: number;
+  yoyo?: boolean;
+  triggerTargetId?: string | "self" | "parent" | "root" | "canvas";
+  interactionTargetId?: string | "self" | "parent" | "root" | "canvas";
+  scrollStart?: string;
+  scrollEnd?: string;
+  scrollDistance?: string;
+  scrollSceneHeight?: string;
+  scrub?: boolean | number;
+  pin?: boolean;
+  markers?: boolean;
+  once?: boolean;
+  toggleActions?: string;
+  flipPreset?: "none" | "expand" | "swap" | "reorder" | "card-pop";
+  flipAbsolute?: boolean;
+  flipScale?: boolean;
+  flipSimple?: boolean;
+  flipFade?: boolean;
+  flipProps?: string;
 };
 
 export type ElementNode = {

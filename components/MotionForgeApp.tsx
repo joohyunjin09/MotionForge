@@ -129,13 +129,15 @@ export function MotionForgeApp() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-950">
+    <div className="flex h-screen max-w-full flex-col overflow-hidden overflow-x-hidden bg-slate-950">
       <TopToolbar viewport={viewport} onViewportChange={setViewport} onExport={() => setIsExportOpen(true)} onReset={handleReset} />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <ElementTree tree={tree} selectedId={selectedId} selectedNode={selectedNode} onSelect={setSelectedId} onAddElement={handleAddElement} />
         <CanvasPreview tree={tree} viewport={viewport} selectedId={selectedId} onSelect={setSelectedId} />
         <InspectorPanel
           node={selectedNode}
+          parent={selectedParent}
+          tree={tree}
           viewport={viewport}
           canDelete={canDeleteSelected}
           canDuplicate={canDuplicateSelected}

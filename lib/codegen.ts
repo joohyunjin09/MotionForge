@@ -1,13 +1,14 @@
 import type { AnimationConfig, ElementNode, Viewport } from "./types";
 import { flattenTree } from "./treeUtils";
-import { getResolvedStyles, styleConfigToTailwindClasses } from "./styleUtils";
-
-function escapeText(value = "") {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+import { getResolvedStyles, shouldFitFullWidthInsideHorizontalMargins, styleConfigToInlineStyle, styleConfigToTailwindClasses } from "./styleUtils";
+import { clampString, safeAnimationConfig, safeButtonType, safeChildren, safeElementType, safeFormMethod, safeHeadingLevel, safeInputType, safeListType, safeRows, safeUrl, SAFETY_LIMITS, textContentMaxLengthForType } from "./safety";
 
 function escapeAttribute(value = "") {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function escapeJsString(value = "") {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
 }
 
 function indent(level: number) {
@@ -22,23 +23,214 @@ function prefixClasses(className: string, prefix: string) {
     .join(" ");
 }
 
+function textAlignResetClasses(node: ElementNode) {
+  const mobile = getResolvedStyles(node, "mobile");
+  const tablet = getResolvedStyles(node, "tablet");
+  const desktop = getResolvedStyles(node, "desktop");
+  const resets: string[] = [];
+
+  if (mobile.textAlign && !tablet.textAlign) resets.push("md:text-left");
+  if ((mobile.textAlign || tablet.textAlign) && !desktop.textAlign) resets.push("lg:text-left");
+
+  return resets.join(" ");
+}
+
 function responsiveClassName(node: ElementNode) {
   const mobile = styleConfigToTailwindClasses(getResolvedStyles(node, "mobile"));
   const tablet = prefixClasses(styleConfigToTailwindClasses(getResolvedStyles(node, "tablet")), "md");
   const desktop = prefixClasses(styleConfigToTailwindClasses(getResolvedStyles(node, "desktop")), "lg");
-  return [mobile, tablet, desktop].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  return [mobile, tablet, desktop, textAlignResetClasses(node)].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
-function tagForType(type: ElementNode["type"]) {
-  const tags: Record<ElementNode["type"], string> = {
+function tagForNode(node: ElementNode) {
+  const safeType = safeElementType(node.type);
+  if (safeType === "unknown") return "div";
+
+  if (safeType === "heading") return `h${safeHeadingLevel(node.props?.headingLevel)}`;
+  if (safeType === "list") return safeListType(node.props?.listType) === "ordered" ? "ol" : "ul";
+  if (safeType === "image" && safeUrl(node.props?.src, "")) return "img";
+
+  const tags: Record<Exclude<ReturnType<typeof safeElementType>, "unknown">, string> = {
     section: "section",
     div: "div",
+    header: "header",
+    main: "main",
+    footer: "footer",
+    nav: "nav",
+    article: "article",
+    aside: "aside",
     heading: "h1",
     paragraph: "p",
+    span: "span",
+    link: "a",
     button: "button",
     image: "div",
+    list: "ul",
+    listItem: "li",
+    form: "form",
+    label: "label",
+    input: "input",
+    textarea: "textarea",
   };
-  return tags[type];
+  return tags[safeType];
+}
+
+function stringAttribute(name: string, value?: string) {
+  const trimmed = value?.trim();
+  return trimmed ? `${name}="${escapeAttribute(trimmed)}"` : "";
+}
+
+function placeholderAttribute(value?: string) {
+  const safeValue = clampString(value, SAFETY_LIMITS.placeholder);
+  return safeValue ? `placeholder="${escapeAttribute(safeValue)}"` : "";
+}
+
+function numberAttribute(name: string, value?: number) {
+  return typeof value === "number" && Number.isFinite(value) ? `${name}={${value}}` : "";
+}
+
+function booleanAttribute(name: string, value?: boolean) {
+  return value ? `${name}={true}` : "";
+}
+
+function styleAttribute(style: ReturnType<typeof styleConfigToInlineStyle>) {
+  const entries = Object.entries(style).filter((entry): entry is [string, string | number] => entry[1] !== undefined && entry[1] !== "");
+  if (entries.length === 0) return "";
+
+  const body = entries
+    .map(([property, value]) => `${property}: ${typeof value === "number" ? value : `"${escapeJsString(value)}"`}`)
+    .join(", ");
+
+  return `style={{ ${body} }}`;
+}
+
+function escapeCssString(value = "") {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\A ");
+}
+
+function escapeTemplateLiteral(value = "") {
+  return value.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+}
+
+function cssPropertyName(property: string) {
+  return property.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+}
+
+function cssValue(value: string | number) {
+  return typeof value === "number" ? String(value) : value;
+}
+
+function cssDeclarationBlock(style: ReturnType<typeof styleConfigToInlineStyle>) {
+  return Object.entries(style)
+    .filter((entry): entry is [string, string | number] => entry[1] !== undefined && entry[1] !== "")
+    .map(([property, value]) => `${cssPropertyName(property)}: ${cssValue(value)};`)
+    .join(" ");
+}
+
+function responsiveStyleSheet(tree: ElementNode) {
+  const nodes = flattenTree(tree);
+  const baseRules = [
+    "[data-motionforge-root], [data-motionforge-root] * { box-sizing: border-box; }",
+    "[data-motionforge-root] { width: 100%; margin: 0; padding: 0; }",
+  ].join("\n");
+  const viewportRules: Array<{ viewport: Viewport; media?: string }> = [
+    { viewport: "mobile" },
+    { viewport: "tablet", media: "@media (min-width: 768px)" },
+    { viewport: "desktop", media: "@media (min-width: 1024px)" },
+  ];
+
+  const responsiveRules = viewportRules
+    .map(({ viewport, media }) => {
+      const rules = nodes
+        .map((node) => {
+          const resolvedStyle = getResolvedStyles(node, viewport);
+          const inlineStyle = styleConfigToInlineStyle(resolvedStyle);
+          const declarations = cssDeclarationBlock({
+            ...inlineStyle,
+            ...(shouldFitFullWidthInsideHorizontalMargins(resolvedStyle) ? { alignSelf: "stretch", width: "auto" } : {}),
+          });
+          if (!declarations) return "";
+          return `  [data-motion-id="${escapeCssString(node.id)}"] { ${declarations} }`;
+        })
+        .filter(Boolean);
+
+      if (rules.length === 0) return "";
+      if (!media) return rules.join("\n");
+      return `${media} {\n${rules.join("\n")}\n}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  return [baseRules, responsiveRules].filter(Boolean).join("\n\n");
+}
+
+function typeSpecificAttributes(node: ElementNode) {
+  const props = node.props ?? {};
+  switch (safeElementType(node.type)) {
+    case "link": {
+      const target = props.target === "_blank" ? "_blank" : props.target === "_self" ? "_self" : undefined;
+      return [stringAttribute("href", safeUrl(props.href, "#")), stringAttribute("target", target), target === "_blank" ? "rel=\"noreferrer\"" : ""];
+    }
+    case "button":
+      return [stringAttribute("type", safeButtonType(props.buttonType))];
+    case "image": {
+      const src = safeUrl(props.src, "");
+      const alt = clampString(props.alt, SAFETY_LIMITS.altText);
+      return src ? [stringAttribute("src", src), stringAttribute("alt", alt)] : [stringAttribute("role", "img"), stringAttribute("aria-label", alt)];
+    }
+    case "form":
+      return [stringAttribute("method", safeFormMethod(props.method)), stringAttribute("action", safeUrl(props.action, ""))];
+    case "label":
+      return [stringAttribute("htmlFor", clampString(props.htmlFor, SAFETY_LIMITS.elementName))];
+    case "input": {
+      const inputType = safeInputType(props.inputType);
+      const isCheckable = inputType === "checkbox" || inputType === "radio";
+      return [
+        stringAttribute("type", safeInputType(props.inputType)),
+        isCheckable ? "" : placeholderAttribute(props.placeholder),
+        stringAttribute("name", clampString(props.name, SAFETY_LIMITS.elementName)),
+        stringAttribute(isCheckable ? "value" : "defaultValue", clampString(props.value, SAFETY_LIMITS.shortText)),
+        isCheckable ? booleanAttribute("defaultChecked", props.checked) : "",
+      ];
+    }
+    case "textarea":
+      return [
+        placeholderAttribute(props.placeholder),
+        stringAttribute("name", clampString(props.name, SAFETY_LIMITS.elementName)),
+        numberAttribute("rows", safeRows(props.rows)),
+        stringAttribute("defaultValue", clampString(props.value ?? props.text, SAFETY_LIMITS.shortText)),
+      ];
+    default:
+      return [];
+  }
+}
+
+function attributesForNode(node: ElementNode, className: string, style: Parameters<typeof styleConfigToInlineStyle>[0] = {}, includeStyle = true) {
+  return [`className="${escapeAttribute(className)}"`, includeStyle ? styleAttribute(styleConfigToInlineStyle(style)) : "", `data-motion-id="${escapeAttribute(node.id)}"`, ...typeSpecificAttributes(node)].filter(Boolean).join(" ");
+}
+
+function jsxTextExpression(value: string) {
+  return `{"${escapeJsString(value)}"}`;
+}
+
+function textLinesForNode(node: ElementNode, level: number) {
+  const type = safeElementType(node.type);
+  const text = type === "textarea" || type === "input" ? "" : clampString(node.props?.text, textContentMaxLengthForType(node.type));
+  if (!text) return "";
+
+  return text
+    .split("\n")
+    .flatMap((line, index) => {
+      const lines: string[] = [];
+      if (index > 0) lines.push(`${indent(level + 1)}<br />`);
+      if (line) lines.push(`${indent(level + 1)}${jsxTextExpression(line)}`);
+      return lines;
+    })
+    .join("\n");
+}
+
+function textAndChildrenForNode(node: ElementNode, children: string, level: number) {
+  return [textLinesForNode(node, level), children].filter(Boolean).join("\n");
 }
 
 function renderVisualBlock(level: number) {
@@ -55,37 +247,49 @@ function renderVisualBlock(level: number) {
   ].join("\n");
 }
 
-export function renderElementNode(node: ElementNode, viewport: Viewport = "desktop", level = 0): string {
-  const tag = tagForType(node.type);
-  const className = escapeAttribute(styleConfigToTailwindClasses(getResolvedStyles(node, viewport)));
-  const attrs = `className="${className}" data-motion-id="${node.id}"`;
-  const children = node.children.map((child) => renderElementNode(child, viewport, level + 1)).join("\n");
+export function renderElementNode(node: ElementNode, viewport: Viewport = "desktop", level = 0, visited = new Set<string>()): string {
+  if (level > SAFETY_LIMITS.treeDepth) return `${indent(level)}{/* Maximum tree depth reached. */}`;
+  if (node.id && visited.has(node.id)) return `${indent(level)}{/* Invalid tree cycle detected. */}`;
+  const nextVisited = new Set(visited);
+  if (node.id) nextVisited.add(node.id);
+  const safeType = safeElementType(node.type);
+  const tag = tagForNode(node);
+  const resolvedStyle = getResolvedStyles(node, viewport);
+  const className = styleConfigToTailwindClasses(resolvedStyle);
+  const attrs = attributesForNode(node, className, resolvedStyle);
+  const children = safeChildren(node).map((child) => renderElementNode(child, viewport, level + 1, nextVisited)).join("\n");
 
-  if (node.type === "image") {
+  if (safeType === "input" || safeType === "textarea" || tag === "img") return `${indent(level)}<${tag} ${attrs} />`;
+
+  if (safeType === "image") {
     const inner = [renderVisualBlock(level + 1), children].filter(Boolean).join("\n");
     return `${indent(level)}<${tag} ${attrs}>\n${inner}\n${indent(level)}</${tag}>`;
   }
 
-  const text = escapeText(node.props.text);
-  const inner = [text ? `${indent(level + 1)}${text}` : "", children].filter(Boolean).join("\n");
+  const inner = textAndChildrenForNode(node, children, level);
 
-  if (!inner) return `${indent(level)}<${tag} ${attrs} />`;
   return `${indent(level)}<${tag} ${attrs}>\n${inner}\n${indent(level)}</${tag}>`;
 }
 
-function renderExportNode(node: ElementNode, level = 2): string {
-  const tag = tagForType(node.type);
-  const className = escapeAttribute(responsiveClassName(node));
-  const attrs = `className="${className}" data-motion-id="${node.id}"`;
-  const children = node.children.map((child) => renderExportNode(child, level + 1)).join("\n");
+function renderExportNode(node: ElementNode, level = 2, visited = new Set<string>()): string {
+  if (level > SAFETY_LIMITS.treeDepth) return `${indent(level)}{/* Maximum tree depth reached. */}`;
+  if (node.id && visited.has(node.id)) return `${indent(level)}{/* Invalid tree cycle detected. */}`;
+  const nextVisited = new Set(visited);
+  if (node.id) nextVisited.add(node.id);
+  const safeType = safeElementType(node.type);
+  const tag = tagForNode(node);
+  const className = responsiveClassName(node);
+  const attrs = attributesForNode(node, className, {}, false);
+  const children = safeChildren(node).map((child) => renderExportNode(child, level + 1, nextVisited)).join("\n");
 
-  if (node.type === "image") {
+  if (safeType === "input" || safeType === "textarea" || tag === "img") return `${indent(level)}<${tag} ${attrs} />`;
+
+  if (safeType === "image") {
     const inner = [renderVisualBlock(level + 1), children].filter(Boolean).join("\n");
     return `${indent(level)}<${tag} ${attrs}>\n${inner}\n${indent(level)}</${tag}>`;
   }
 
-  const text = escapeText(node.props.text);
-  const inner = [text ? `${indent(level + 1)}${text}` : "", children].filter(Boolean).join("\n");
+  const inner = textAndChildrenForNode(node, children, level);
   return `${indent(level)}<${tag} ${attrs}>\n${inner}\n${indent(level)}</${tag}>`;
 }
 
@@ -111,6 +315,7 @@ function hasNumber(value: number | undefined) {
 }
 
 function animationFromConfig(animation: AnimationConfig) {
+  animation = safeAnimationConfig(animation);
   const from = { ...(presetFromConfig(animation) ?? {}) } as Record<string, number | string>;
 
   if (hasNumber(animation.x)) from.x = animation.x!;
@@ -124,10 +329,12 @@ function animationFromConfig(animation: AnimationConfig) {
 }
 
 function usesScrollTrigger(animation: AnimationConfig) {
+  animation = safeAnimationConfig(animation);
   return animation.mode === "scroll" || animation.trigger === "scroll-enter";
 }
 
 function usesFlip(animation: AnimationConfig) {
+  animation = safeAnimationConfig(animation);
   return animation.mode === "flip";
 }
 
@@ -144,7 +351,7 @@ export function generateGSAPCode(tree: ElementNode): string {
   const needsFlip = animated.some((node) => node.animation && usesFlip(node.animation));
   const pluginRegistration = [needsScrollTrigger ? "ScrollTrigger" : "", needsFlip ? "Flip" : ""].filter(Boolean).join(", ");
   const configs = animated.map((node) => {
-    const animation = node.animation!;
+    const animation = safeAnimationConfig(node.animation);
     return {
       id: node.id,
       ...animation,
@@ -257,7 +464,7 @@ ${pluginRegistration ? `  gsap.registerPlugin(${pluginRegistration});\n` : ""}  
     flipProps?: string;
     from?: Record<string, number | string> | null;
   };
-  const configs = motionConfigs as MotionConfig[];
+  const configs = motionConfigs as unknown as MotionConfig[];
 
   const tweenVars = (config: MotionConfig) => ({
     duration: config.duration,
@@ -305,6 +512,7 @@ ${flipHelpers}
 ${flipBranch}
 
       if (!config.from) return;
+      const fromVars = config.from;
 
       const baseTweenVars = tweenVars(config);
       const toVars = {
@@ -320,16 +528,16 @@ ${flipBranch}
       if (config.mode === "scroll" || config.trigger === "scroll-enter") {
         const triggerTarget = resolveScrollTriggerTarget(config, target);
         gsap.from(target, {
-          ...config.from,
+          ...fromVars,
           ...baseTweenVars,
           scrollTrigger: scrollTriggerVars(config, triggerTarget),
         });
       } else if (config.trigger === "hover") {
-        const onEnter = () => gsap.fromTo(target, config.from, toVars);
+        const onEnter = () => gsap.fromTo(target, fromVars, toVars);
         target.addEventListener("mouseenter", onEnter);
         cleanups.push(() => target.removeEventListener("mouseenter", onEnter));
       } else {
-        gsap.from(target, { ...config.from, ...baseTweenVars });
+        gsap.from(target, { ...fromVars, ...baseTweenVars });
       }
     });
   }, root);
@@ -345,6 +553,7 @@ export function generateReactCode(tree: ElementNode): string {
   const animated = flattenTree(tree).filter(isAnimatedNode);
   const needsScrollTrigger = animated.some((node) => node.animation && usesScrollTrigger(node.animation));
   const needsFlip = animated.some((node) => node.animation && usesFlip(node.animation));
+  const exportedStyles = responsiveStyleSheet(tree);
   const imports = [
     "\"use client\";",
     "",
@@ -362,8 +571,8 @@ export function MotionForgeHero() {
   ${generateGSAPCode(tree).replace(/\n/g, "\n  ")}
 
   return (
-    <div ref={rootRef}>
-${renderExportNode(tree, 3)}
+    <div ref={rootRef} data-motionforge-root style={{ width: "100%", boxSizing: "border-box", margin: 0, padding: 0 }}>
+${exportedStyles ? `      <style>{\`\n${escapeTemplateLiteral(exportedStyles)}\n      \`}</style>\n` : ""}${renderExportNode(tree, 3)}
     </div>
   );
 }

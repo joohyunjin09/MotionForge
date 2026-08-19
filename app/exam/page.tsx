@@ -1,128 +1,175 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-export default function MotionForgeHero() {
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  const motionConfigs = [
-    {
+const motionConfigs = [
+  {
       "id": "hero-container",
+      "mode": "tween",
       "type": "fade-in",
       "trigger": "page-load",
       "duration": 0.8,
       "delay": 0,
       "ease": "power3.out",
       "stagger": 0,
+      "yoyo": false,
+      "pin": false,
+      "markers": false,
+      "flipPreset": "expand",
+      "flipAbsolute": false,
+      "flipScale": false,
+      "flipSimple": false,
+      "flipFade": false,
       "from": {
         "opacity": 0
       }
-    },
-    {
-      "id": "text-column",
-      "type": "slide-up",
-      "trigger": "page-load",
-      "duration": 0.8,
-      "delay": 0,
-      "ease": "power3.out",
-      "stagger": 0.08,
-      "from": {
-        "opacity": 0,
-        "y": 32
-      }
-    },
-    {
-      "id": "hero-heading",
-      "type": "slide-up",
-      "trigger": "page-load",
-      "duration": 0.8,
-      "delay": 0.1,
-      "ease": "power3.out",
-      "stagger": 0,
-      "from": {
-        "opacity": 0,
-        "y": 32
-      }
-    },
-    {
-      "id": "hero-paragraph",
-      "type": "slide-up",
-      "trigger": "page-load",
-      "duration": 0.8,
-      "delay": 0.2,
-      "ease": "power3.out",
-      "stagger": 0,
-      "from": {
-        "opacity": 0,
-        "y": 32
-      }
-    },
-    {
-      "id": "hero-button",
-      "type": "slide-up",
-      "trigger": "scroll-enter",
-      "duration": 0.8,
-      "delay": 0.45,
-      "ease": "back.out",
-      "stagger": 0,
-      "from": {
-        "opacity": 0,
-        "y": 32
-      }
     }
-  ];
+];
+
+export default function MotionForgeHero() {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
   
-    gsap.registerPlugin(ScrollTrigger);
+    const cleanups: Array<() => void> = [];
+    type MotionConfig = {
+      id: string;
+      mode?: "tween" | "scroll" | "flip";
+      type?: string;
+      trigger?: string;
+      duration?: number;
+      delay?: number;
+      ease?: string;
+      stagger?: number;
+      repeat?: number;
+      yoyo?: boolean;
+      transformOrigin?: string;
+      triggerTargetId?: string;
+      interactionTargetId?: string;
+      scrollStart?: string;
+      scrollEnd?: string;
+      scrollDistance?: string;
+      scrollSceneHeight?: string;
+      scrub?: boolean | number;
+      pin?: boolean;
+      markers?: boolean;
+      once?: boolean;
+      toggleActions?: string;
+      flipPreset?: "none" | "expand" | "swap" | "reorder" | "card-pop";
+      flipAbsolute?: boolean;
+      flipScale?: boolean;
+      flipSimple?: boolean;
+      flipFade?: boolean;
+      flipProps?: string;
+      from?: Record<string, number | string> | null;
+    };
+    const configs = motionConfigs as unknown as MotionConfig[];
+
+    const tweenVars = (config: MotionConfig) => ({
+      duration: config.duration,
+      delay: config.delay,
+      ease: config.ease,
+      stagger: config.stagger || undefined,
+      repeat: config.repeat ?? undefined,
+      yoyo: config.yoyo || undefined,
+      transformOrigin: config.transformOrigin || undefined,
+    });
+
+    const normalizeScrollEnd = (value?: string) => {
+      const trimmed = value?.trim();
+      if (!trimmed) return undefined;
+      return /^\d+(?:\.\d+)?$/.test(trimmed) ? `+=${trimmed}` : trimmed;
+    };
+
+    const resolveScrollTriggerTarget = (config: MotionConfig, target: HTMLElement) => {
+      const triggerTargetId = config.triggerTargetId || "self";
+      if (triggerTargetId === "self") return target;
+      if (triggerTargetId === "parent") return target.parentElement || target;
+      if (triggerTargetId === "root" || triggerTargetId === "canvas") {
+        return root.querySelector<HTMLElement>(`[data-motion-id="${motionConfigs[0]?.id}"]`) || root;
+      }
+      return root.querySelector<HTMLElement>(`[data-motion-id="${triggerTargetId}"]`) || target;
+    };
+
+    // MotionForge preview uses the canvas as a custom scroller. Exported code uses page scroll by default.
+    const scrollTriggerVars = (config: MotionConfig, target: Element) => ({
+      trigger: target,
+      start: config.scrollStart || "top 80%",
+      end: config.scrollEnd || normalizeScrollEnd(config.scrollDistance) || "bottom top",
+      scrub: config.scrub === undefined || config.scrub === false ? undefined : config.scrub,
+      pin: config.pin || undefined,
+      markers: config.markers || undefined,
+      once: config.once ?? (config.trigger === "scroll-enter"),
+      toggleActions: config.toggleActions || "play none none none",
+    });
+
+
     const ctx = gsap.context(() => {
-      motionConfigs.forEach((config) => {
-        const target = root.querySelector(`[data-motion-id="${config.id}"]`);
-        if (!target || !config.from) return;
+      configs.forEach((config) => {
+        const target = root.querySelector<HTMLElement>(`[data-motion-id="${config.id}"]`);
+        if (!target) return;
+
+
+        if (!config.from) return;
+        const fromVars = config.from;
   
-        const tweenVars = {
-          ...config.from,
-          duration: config.duration,
-          delay: config.delay,
-          ease: config.ease,
-          stagger: config.stagger || undefined,
+        const baseTweenVars = tweenVars(config);
+        const toVars = {
+          opacity: 1,
+          x: 0,
+          y: 0,
+          rotate: 0,
+          scale: 1,
+          filter: "blur(0px)",
+          ...baseTweenVars,
         };
   
-        if (config.trigger === "scroll-enter") {
+        if (config.mode === "scroll" || config.trigger === "scroll-enter") {
+          const triggerTarget = resolveScrollTriggerTarget(config, target);
           gsap.from(target, {
-            ...tweenVars,
-            scrollTrigger: { trigger: target, start: "top 80%", once: true },
+            ...fromVars,
+            ...baseTweenVars,
+            scrollTrigger: scrollTriggerVars(config, triggerTarget),
           });
         } else if (config.trigger === "hover") {
-          const onEnter = () => gsap.fromTo(target, config.from, { opacity: 1, x: 0, y: 0, scale: 1, filter: "blur(0px)", duration: config.duration, ease: config.ease });
+          const onEnter = () => gsap.fromTo(target, fromVars, toVars);
           target.addEventListener("mouseenter", onEnter);
+          cleanups.push(() => target.removeEventListener("mouseenter", onEnter));
         } else {
-          gsap.from(target, tweenVars);
+          gsap.from(target, { ...fromVars, ...baseTweenVars });
         }
       });
     }, root);
   
-    return () => ctx.revert();
+    return () => {
+      cleanups.forEach((dispose) => dispose());
+      ctx.revert();
+    };
   }, []);
 
   return (
-    <div ref={rootRef}>
-      <section className="justify-center items-center relative w-full px-5 py-14 min-h-screen m-0 gap-0 rounded-none bg-slate-950 text-white z-[0] overflow-hidden md:justify-center md:items-center md:relative md:w-full md:px-8 md:py-12 md:min-h-screen md:m-0 md:gap-0 md:rounded-none md:bg-slate-950 md:text-white md:z-[0] md:overflow-hidden lg:justify-center lg:items-center lg:relative lg:w-full lg:px-10 lg:py-16 lg:min-h-screen lg:m-0 lg:gap-0 lg:rounded-none lg:bg-slate-950 lg:text-white lg:z-[0] lg:overflow-hidden" data-motion-id="hero-section">
-        <div className="flex flex-col justify-center items-center relative w-full max-w-[1120px] p-6 mx-auto gap-8 rounded-2xl bg-white/10 text-white z-[10] overflow-hidden md:flex md:flex-col md:justify-center md:items-center md:relative md:w-full md:max-w-3xl md:p-6 md:mx-auto md:gap-8 md:rounded-2xl md:bg-white/10 md:text-white md:z-[10] md:overflow-hidden lg:flex lg:justify-center lg:items-center lg:relative lg:w-full lg:max-w-[1120px] lg:p-6 lg:mx-auto lg:gap-8 lg:rounded-2xl lg:bg-white/10 lg:text-white lg:z-[10] lg:overflow-hidden" data-motion-id="hero-container">
-          <div className="flex flex-col justify-center items-start w-full p-2 m-0 gap-5 rounded-2xl bg-transparent text-white overflow-visible md:flex md:flex-col md:justify-center md:items-center md:w-full md:p-2 md:m-0 md:gap-5 md:rounded-2xl md:bg-transparent md:text-white md:overflow-visible lg:flex lg:flex-col lg:justify-center lg:items-center lg:w-full lg:p-2 lg:m-0 lg:gap-5 lg:rounded-2xl lg:bg-transparent lg:text-white lg:overflow-visible" data-motion-id="text-column">
-            <h1 className="block w-full p-0 m-0 text-4xl font-bold bg-transparent text-white overflow-visible leading-tight max-w-3xl md:block md:w-full md:p-0 md:m-0 md:text-4xl md:font-bold md:bg-transparent md:text-center md:text-white md:overflow-visible md:leading-tight md:max-w-3xl lg:block lg:w-full lg:p-0 lg:m-0 lg:text-5xl lg:font-bold lg:bg-transparent lg:text-white lg:overflow-visible lg:leading-tight lg:max-w-3xl" data-motion-id="hero-heading">
-              Build animated sections visually
-            </h1>
-            <p className="block w-full p-0 m-0 text-lg font-normal bg-transparent text-slate-300 text-center overflow-visible max-w-xl leading-7 md:block md:w-full md:p-0 md:m-0 md:text-lg md:font-normal md:bg-transparent md:text-slate-300 md:text-center md:overflow-visible md:max-w-xl md:leading-7 lg:block lg:w-full lg:p-0 lg:m-0 lg:text-lg lg:font-normal lg:bg-transparent lg:text-slate-300 lg:text-center lg:overflow-visible lg:max-w-xl lg:leading-7" data-motion-id="hero-paragraph">
-              Design responsive React, Tailwind, and GSAP sections without losing control of the code.
-            </p>
-            <button className="block w-fit px-5 py-3 m-0 rounded-full text-base font-semibold bg-cyan-300 text-slate-950 overflow-visible md:block md:w-fit md:px-5 md:py-3 md:m-0 md:rounded-full md:text-base md:font-semibold md:bg-cyan-300 md:text-slate-950 md:overflow-visible lg:block lg:w-fit lg:px-5 lg:py-3 lg:m-0 lg:rounded-full lg:text-base lg:font-semibold lg:bg-cyan-300 lg:text-slate-950 lg:overflow-visible" data-motion-id="hero-button">
-              Get Started
-            </button>
-          </div>
+    <div ref={rootRef} data-motionforge-root style={{ width: "100%", boxSizing: "border-box", margin: 0, padding: 0 }}>
+      <style>{`
+  [data-motionforge-root], [data-motionforge-root] * { box-sizing: border-box; }
+  [data-motionforge-root] { width: 100%; margin: 0; padding: 0; }
+  [data-motion-id="hero-section"] { z-index: 0; }
+  [data-motion-id="hero-container"] { align-self: stretch; width: auto; z-index: 10; }
+
+@media (min-width: 768px) {
+  [data-motion-id="hero-section"] { z-index: 0; }
+  [data-motion-id="hero-container"] { align-self: stretch; width: auto; z-index: 10; }
+}
+
+@media (min-width: 1024px) {
+  [data-motion-id="hero-section"] { z-index: 0; }
+  [data-motion-id="hero-container"] { align-self: stretch; width: auto; z-index: 10; }
+}
+      `}</style>
+      <section className="justify-center items-center relative w-full min-h-screen px-5 py-10 gap-0 rounded-none bg-slate-950 text-white overflow-hidden md:justify-center md:items-center md:relative md:w-full md:min-h-screen md:px-8 md:py-12 md:gap-0 md:rounded-none md:bg-slate-950 md:text-white md:overflow-hidden lg:justify-center lg:items-center lg:relative lg:w-full lg:min-h-screen lg:gap-0 lg:rounded-none lg:bg-slate-950 lg:text-white lg:overflow-hidden" data-motion-id="hero-section">
+        <div className="flex flex-col justify-center items-center relative w-full p-4 m-5 gap-6 rounded-2xl bg-white/10 text-white overflow-hidden md:flex md:flex-col md:justify-center md:items-center md:relative md:max-w-3xl md:p-6 md:m-5 md:gap-8 md:rounded-2xl md:bg-white/10 md:text-white md:overflow-hidden lg:grid lg:grid-cols-2 lg:justify-center lg:items-center lg:relative lg:p-10 lg:m-5 lg:gap-8 lg:rounded-2xl lg:bg-white/10 lg:text-white lg:overflow-hidden" data-motion-id="hero-container">
+
         </div>
       </section>
     </div>

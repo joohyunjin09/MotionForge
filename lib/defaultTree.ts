@@ -21,8 +21,9 @@ export const defaultTree: ElementNode = {
       justifyContent: "center",
       alignItems: "center",
       position: "relative",
-      width: "full",
-      padding: "px-10 py-16 min-h-screen",
+      width: "w-full",
+      minHeight: "min-h-screen",
+      padding: "px-10 py-16",
       margin: "m-0",
       gap: "gap-0",
       borderRadius: "rounded-none",
@@ -33,10 +34,10 @@ export const defaultTree: ElementNode = {
       overflow: "hidden",
     },
     mobile: {
-      padding: "px-5 py-10 min-h-screen",
+      padding: "px-5 py-10",
     },
     tablet: {
-      padding: "px-8 py-12 min-h-screen",
+      padding: "px-8 py-12",
     },
   },
   animation: { ...defaultAnimation },
@@ -52,7 +53,7 @@ export const defaultTree: ElementNode = {
           justifyContent: "center",
           alignItems: "center",
           position: "relative",
-          width: "full",
+          width: "w-full",
           maxWidth: "max-w-[1120px]",
           padding: "p-6",
           margin: "mx-auto",
@@ -69,7 +70,7 @@ export const defaultTree: ElementNode = {
           flexDirection: "column",
           padding: "p-4",
           gap: "gap-6",
-          width: "full",
+          width: "w-full",
         },
         tablet: {
           display: "flex",
@@ -92,7 +93,7 @@ export const defaultTree: ElementNode = {
               flexDirection: "column",
               justifyContent: "center",
               alignItems: "start",
-              width: "full",
+              width: "w-full",
               gap: "gap-5",
               padding: "p-2",
               margin: "m-0",
@@ -118,7 +119,7 @@ export const defaultTree: ElementNode = {
               styles: {
                 desktop: {
                   display: "block",
-                  width: "full",
+                  width: "w-full",
                   padding: "p-0",
                   margin: "m-0",
                   fontSize: "text-5xl",
@@ -144,7 +145,7 @@ export const defaultTree: ElementNode = {
               styles: {
                 desktop: {
                   display: "block",
-                  width: "full",
+                  width: "w-full",
                   padding: "p-0",
                   margin: "m-0",
                   fontSize: "text-lg",
@@ -169,7 +170,7 @@ export const defaultTree: ElementNode = {
               styles: {
                 desktop: {
                   display: "block",
-                  width: "fit",
+                  width: "w-fit",
                   padding: "px-5 py-3",
                   margin: "m-0",
                   borderRadius: "rounded-full",
@@ -197,7 +198,7 @@ export const defaultTree: ElementNode = {
               flexDirection: "column",
               justifyContent: "center",
               alignItems: "center",
-              width: "full",
+              width: "w-full",
               maxWidth: "max-w-[520px]",
               height: "280px",
               aspectRatio: "aspect-video",

@@ -1,6 +1,46 @@
 export type Viewport = "desktop" | "tablet" | "mobile";
 
-export type ElementType = "section" | "div" | "heading" | "paragraph" | "button" | "image";
+export type InputType =
+  | "text"
+  | "email"
+  | "password"
+  | "number"
+  | "search"
+  | "tel"
+  | "url"
+  | "date"
+  | "time"
+  | "color"
+  | "checkbox"
+  | "radio"
+  | "range";
+
+export type ButtonType = "button" | "submit" | "reset";
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+export type ListType = "unordered" | "ordered";
+export type FormMethod = "get" | "post";
+
+export type ElementType =
+  | "section"
+  | "div"
+  | "header"
+  | "main"
+  | "footer"
+  | "nav"
+  | "article"
+  | "aside"
+  | "heading"
+  | "paragraph"
+  | "span"
+  | "link"
+  | "button"
+  | "image"
+  | "list"
+  | "listItem"
+  | "form"
+  | "label"
+  | "input"
+  | "textarea";
 
 export type StyleConfig = {
   display?: "block" | "flex" | "grid";
@@ -8,22 +48,39 @@ export type StyleConfig = {
   justifyContent?: string;
   alignItems?: string;
   position?: "static" | "relative" | "absolute" | "fixed" | "sticky";
-  width?: "auto" | "full" | "fit" | "1/2" | "1/3" | "2/3";
+  width?: string;
+  minWidth?: string;
+  maxWidth?: string;
+  height?: string;
+  minHeight?: string;
+  maxHeight?: string;
   padding?: string;
+  paddingX?: string;
+  paddingY?: string;
+  paddingTop?: string;
+  paddingRight?: string;
+  paddingBottom?: string;
+  paddingLeft?: string;
   margin?: string;
+  marginX?: string;
+  marginY?: string;
+  marginTop?: string;
+  marginRight?: string;
+  marginBottom?: string;
+  marginLeft?: string;
   gap?: string;
+  rowGap?: string;
+  columnGap?: string;
   borderRadius?: string;
   fontSize?: string;
   fontWeight?: string;
   background?: string;
   textColor?: string;
+  borderColor?: string;
   opacity?: number;
   zIndex?: number;
   overflow?: "visible" | "hidden";
   customClassName?: string;
-  maxWidth?: string;
-  minHeight?: string;
-  height?: string;
   insetTop?: string;
   insetRight?: string;
   insetBottom?: string;
@@ -85,6 +142,26 @@ export type ElementNode = {
     text?: string;
     src?: string;
     alt?: string;
+    href?: string;
+    target?: "_self" | "_blank";
+
+    inputType?: InputType;
+    placeholder?: string;
+    name?: string;
+    value?: string;
+    checked?: boolean;
+
+    buttonType?: ButtonType;
+
+    headingLevel?: HeadingLevel;
+
+    listType?: ListType;
+
+    htmlFor?: string;
+    rows?: number;
+
+    action?: string;
+    method?: FormMethod;
   };
   styles: {
     desktop: StyleConfig;

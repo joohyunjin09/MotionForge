@@ -37,3 +37,27 @@ textarea {
 .motionforge-scrollbar::-webkit-scrollbar-track {
   background: #f1f5f9;
 }
+
+.motionforge-canvas-viewport .h-screen {
+  height: var(--motionforge-viewport-height);
+}
+
+.motionforge-canvas-viewport .min-h-screen {
+  min-height: var(--motionforge-viewport-height);
+}
+
+.motionforge-canvas-viewport .max-h-screen {
+  max-height: var(--motionforge-viewport-height);
+}
+
+.motionforge-canvas-viewport .w-screen {
+  width: var(--motionforge-viewport-width);
+}
+
+.motionforge-canvas-viewport .min-w-screen {
+  min-width: var(--motionforge-viewport-width);
+}
+
+.motionforge-canvas-viewport .max-w-screen {
+  max-width: var(--motionforge-viewport-width);
+}

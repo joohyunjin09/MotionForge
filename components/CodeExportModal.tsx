@@ -12,6 +12,7 @@ export function CodeExportModal({ tree, onClose }: { tree: ElementNode; onClose:
           <div>
             <h2 className="text-xl font-bold text-slate-950">Export generated code</h2>
             <p className="text-sm text-slate-500">Copy this production-friendly React, Tailwind, and GSAP component into your app.</p>
+            <p className="mt-1 text-xs text-slate-500">Export includes a scoped sizing reset for the generated root. Tailwind utilities still need to be available in the target app.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">
             Close

@@ -1,5 +1,20 @@
 import type { ElementNode, StyleConfig, Viewport } from "./types";
-import { getResolvedStyles, styleConfigToTailwindClasses } from "./styleUtils";
+import {
+  getResolvedStyles,
+  isTailwindBackgroundClass,
+  isTailwindBorderColorClass,
+  isTailwindHeightClass,
+  isTailwindMaxHeightClass,
+  isTailwindMaxWidthClass,
+  isTailwindMinHeightClass,
+  isTailwindMinWidthClass,
+  isTailwindTextColorClass,
+  isTailwindWidthClass,
+  isValidColorFieldValue,
+  shouldFitFullWidthInsideHorizontalMargins,
+  styleConfigToTailwindClasses,
+} from "./styleUtils";
+import { clampString, isProbablyDangerousUrl, normalizeCssLength, SAFETY_LIMITS } from "./safety";
 
 export type DiagnosticSeverity = "info" | "warning" | "error";
 
@@ -21,37 +36,170 @@ type ConflictGroup = {
 
 const positionClasses = new Set(["static", "relative", "absolute", "fixed", "sticky"]);
 const displayClasses = new Set(["block", "flex", "grid", "hidden", "inline", "inline-block"]);
-const textColorPattern = /^text-(?:white|(?:slate|cyan|blue|red|green|zinc|neutral|stone)-[\w./[\]%-]+)$/;
 const textAlignClasses = new Set(["text-left", "text-center", "text-right", "text-justify"]);
 const textTransformClasses = new Set(["normal-case", "uppercase", "lowercase", "capitalize"]);
 const objectFitClasses = new Set(["object-contain", "object-cover", "object-fill", "object-none", "object-scale-down"]);
 const objectPositionClasses = new Set(["object-center", "object-top", "object-bottom", "object-left", "object-right"]);
 const whiteSpaceClasses = new Set(["whitespace-normal", "whitespace-nowrap", "whitespace-pre-line", "whitespace-pre-wrap"]);
+const legacyWidthValues = new Set(["auto", "full", "fit", "1/2", "1/3", "2/3", "1/4", "3/4"]);
+
+const stripNegativePrefix = (className: string) => (className.startsWith("-") ? className.slice(1) : className);
+const isBasePaddingClass = (className: string) => /^p-.+/.test(className);
+const isPaddingXClass = (className: string) => /^px-.+/.test(className);
+const isPaddingYClass = (className: string) => /^py-.+/.test(className);
+const isPaddingTopClass = (className: string) => /^pt-.+/.test(className);
+const isPaddingRightClass = (className: string) => /^pr-.+/.test(className);
+const isPaddingBottomClass = (className: string) => /^pb-.+/.test(className);
+const isPaddingLeftClass = (className: string) => /^pl-.+/.test(className);
+const isBaseMarginClass = (className: string) => /^m-.+/.test(stripNegativePrefix(className));
+const isMarginXClass = (className: string) => /^mx-.+/.test(stripNegativePrefix(className));
+const isMarginYClass = (className: string) => /^my-.+/.test(stripNegativePrefix(className));
+const isMarginTopClass = (className: string) => /^mt-.+/.test(stripNegativePrefix(className));
+const isMarginRightClass = (className: string) => /^mr-.+/.test(stripNegativePrefix(className));
+const isMarginBottomClass = (className: string) => /^mb-.+/.test(stripNegativePrefix(className));
+const isMarginLeftClass = (className: string) => /^ml-.+/.test(stripNegativePrefix(className));
+const isBaseGapClass = (className: string) => /^gap-(?!x-|y-).+/.test(className);
+const isRowGapClass = (className: string) => /^gap-y-.+/.test(className);
+const isColumnGapClass = (className: string) => /^gap-x-.+/.test(className);
 
 const conflictGroups: ConflictGroup[] = [
   {
     id: "width",
     label: "width",
     field: "width",
-    matches: (className) => /^(?:w-auto|w-full|w-fit|w-1\/2|w-1\/3|w-2\/3|w-\[.+\])$/.test(className),
+    matches: isTailwindWidthClass,
+  },
+  {
+    id: "minWidth",
+    label: "min-width",
+    field: "minWidth",
+    matches: isTailwindMinWidthClass,
   },
   {
     id: "maxWidth",
     label: "max-width",
     field: "maxWidth",
-    matches: (className) => /^max-w-.+/.test(className),
+    matches: isTailwindMaxWidthClass,
   },
   {
     id: "minHeight",
     label: "min-height",
     field: "minHeight",
-    matches: (className) => /^min-h-.+/.test(className),
+    matches: isTailwindMinHeightClass,
   },
   {
     id: "height",
     label: "height",
     field: "height",
-    matches: (className) => /^h-.+/.test(className),
+    matches: isTailwindHeightClass,
+  },
+  {
+    id: "maxHeight",
+    label: "max-height",
+    field: "maxHeight",
+    matches: isTailwindMaxHeightClass,
+  },
+  {
+    id: "padding",
+    label: "padding",
+    field: "padding",
+    matches: isBasePaddingClass,
+  },
+  {
+    id: "paddingX",
+    label: "horizontal padding",
+    field: "paddingX",
+    matches: isPaddingXClass,
+  },
+  {
+    id: "paddingY",
+    label: "vertical padding",
+    field: "paddingY",
+    matches: isPaddingYClass,
+  },
+  {
+    id: "paddingTop",
+    label: "top padding",
+    field: "paddingTop",
+    matches: isPaddingTopClass,
+  },
+  {
+    id: "paddingRight",
+    label: "right padding",
+    field: "paddingRight",
+    matches: isPaddingRightClass,
+  },
+  {
+    id: "paddingBottom",
+    label: "bottom padding",
+    field: "paddingBottom",
+    matches: isPaddingBottomClass,
+  },
+  {
+    id: "paddingLeft",
+    label: "left padding",
+    field: "paddingLeft",
+    matches: isPaddingLeftClass,
+  },
+  {
+    id: "margin",
+    label: "margin",
+    field: "margin",
+    matches: isBaseMarginClass,
+  },
+  {
+    id: "marginX",
+    label: "horizontal margin",
+    field: "marginX",
+    matches: isMarginXClass,
+  },
+  {
+    id: "marginY",
+    label: "vertical margin",
+    field: "marginY",
+    matches: isMarginYClass,
+  },
+  {
+    id: "marginTop",
+    label: "top margin",
+    field: "marginTop",
+    matches: isMarginTopClass,
+  },
+  {
+    id: "marginRight",
+    label: "right margin",
+    field: "marginRight",
+    matches: isMarginRightClass,
+  },
+  {
+    id: "marginBottom",
+    label: "bottom margin",
+    field: "marginBottom",
+    matches: isMarginBottomClass,
+  },
+  {
+    id: "marginLeft",
+    label: "left margin",
+    field: "marginLeft",
+    matches: isMarginLeftClass,
+  },
+  {
+    id: "gap",
+    label: "gap",
+    field: "gap",
+    matches: isBaseGapClass,
+  },
+  {
+    id: "rowGap",
+    label: "row gap",
+    field: "rowGap",
+    matches: isRowGapClass,
+  },
+  {
+    id: "columnGap",
+    label: "column gap",
+    field: "columnGap",
+    matches: isColumnGapClass,
   },
   {
     id: "position",
@@ -93,7 +241,7 @@ const conflictGroups: ConflictGroup[] = [
     id: "textColor",
     label: "text color",
     field: "textColor",
-    matches: (className) => textColorPattern.test(className),
+    matches: isTailwindTextColorClass,
   },
   {
     id: "textAlign",
@@ -123,7 +271,13 @@ const conflictGroups: ConflictGroup[] = [
     id: "background",
     label: "background",
     field: "background",
-    matches: (className) => /^bg-.+/.test(className),
+    matches: isTailwindBackgroundClass,
+  },
+  {
+    id: "borderColor",
+    label: "border color",
+    field: "borderColor",
+    matches: isTailwindBorderColorClass,
   },
   {
     id: "gridColumns",
@@ -157,14 +311,34 @@ const conflictGroups: ConflictGroup[] = [
   },
 ];
 
-const rawValueFields: Array<{ field: keyof StyleConfig; prefix: string }> = [
-  { field: "maxWidth", prefix: "max-w" },
-  { field: "minHeight", prefix: "min-h" },
-  { field: "height", prefix: "h" },
-  { field: "insetTop", prefix: "top" },
-  { field: "insetRight", prefix: "right" },
-  { field: "insetBottom", prefix: "bottom" },
-  { field: "insetLeft", prefix: "left" },
+const rawValueFields: Array<{ field: keyof StyleConfig; prefixes: string[]; validLiterals?: Set<string>; suggestion: string }> = [
+  { field: "width", prefixes: ["w"], validLiterals: legacyWidthValues, suggestion: "Use a Tailwind utility like w-full or a CSS value like 600px." },
+  { field: "minWidth", prefixes: ["min-w"], suggestion: "Use a Tailwind utility like min-w-0 or a CSS value like 320px." },
+  { field: "maxWidth", prefixes: ["max-w"], suggestion: "Use a Tailwind utility like max-w-6xl or a CSS value like 1200px." },
+  { field: "height", prefixes: ["h"], suggestion: "Use a Tailwind utility like h-64 or a CSS value like 400px." },
+  { field: "minHeight", prefixes: ["min-h"], suggestion: "Use a Tailwind utility like min-h-screen or a CSS value like 80vh." },
+  { field: "maxHeight", prefixes: ["max-h"], suggestion: "Use a Tailwind utility like max-h-screen or a CSS value like 80vh." },
+  { field: "padding", prefixes: ["p", "px", "py", "pt", "pr", "pb", "pl", "min-h"], suggestion: "Use a Tailwind utility like p-6 or a CSS value like 24px." },
+  { field: "paddingX", prefixes: ["px"], suggestion: "Use a Tailwind utility like px-6 or a CSS value like 24px." },
+  { field: "paddingY", prefixes: ["py"], suggestion: "Use a Tailwind utility like py-8 or a CSS value like 32px." },
+  { field: "paddingTop", prefixes: ["pt"], suggestion: "Use a Tailwind utility like pt-4 or a CSS value like 16px." },
+  { field: "paddingRight", prefixes: ["pr"], suggestion: "Use a Tailwind utility like pr-4 or a CSS value like 16px." },
+  { field: "paddingBottom", prefixes: ["pb"], suggestion: "Use a Tailwind utility like pb-4 or a CSS value like 16px." },
+  { field: "paddingLeft", prefixes: ["pl"], suggestion: "Use a Tailwind utility like pl-4 or a CSS value like 16px." },
+  { field: "margin", prefixes: ["m", "mx", "my", "mt", "mr", "mb", "ml"], suggestion: "Use a Tailwind utility like mx-auto or a CSS value like 24px." },
+  { field: "marginX", prefixes: ["mx"], suggestion: "Use a Tailwind utility like mx-auto or a CSS value like auto." },
+  { field: "marginY", prefixes: ["my"], suggestion: "Use a Tailwind utility like my-8 or a CSS value like 24px." },
+  { field: "marginTop", prefixes: ["mt"], suggestion: "Use a Tailwind utility like mt-8 or a CSS value like 24px." },
+  { field: "marginRight", prefixes: ["mr"], suggestion: "Use a Tailwind utility like mr-4 or a CSS value like auto." },
+  { field: "marginBottom", prefixes: ["mb"], suggestion: "Use a Tailwind utility like mb-4 or a CSS value like 24px." },
+  { field: "marginLeft", prefixes: ["ml"], suggestion: "Use a Tailwind utility like ml-4 or a CSS value like auto." },
+  { field: "gap", prefixes: ["gap", "gap-x", "gap-y"], suggestion: "Use a Tailwind utility like gap-8 or a CSS value like 24px." },
+  { field: "rowGap", prefixes: ["gap-y"], suggestion: "Use a Tailwind utility like gap-y-8 or a CSS value like 24px." },
+  { field: "columnGap", prefixes: ["gap-x"], suggestion: "Use a Tailwind utility like gap-x-8 or a CSS value like 24px." },
+  { field: "insetTop", prefixes: ["top"], suggestion: "Use a Tailwind utility like top-4 or a CSS value like 20px." },
+  { field: "insetRight", prefixes: ["right"], suggestion: "Use a Tailwind utility like right-0 or a CSS value like 10%." },
+  { field: "insetBottom", prefixes: ["bottom"], suggestion: "Use a Tailwind utility like bottom-8 or a CSS value like auto." },
+  { field: "insetLeft", prefixes: ["left"], suggestion: "Use a Tailwind utility like left-0 or a CSS value like 10%." },
 ];
 
 function hasValue(value: string | undefined) {
@@ -176,10 +350,11 @@ function splitClassName(className: string) {
   let current = "";
   let bracketDepth = 0;
 
-  for (const char of className) {
+  for (const char of clampString(className, SAFETY_LIMITS.customClassName)) {
     if (/\s/.test(char) && bracketDepth === 0) {
       if (current) tokens.push(current);
       current = "";
+      if (tokens.length >= SAFETY_LIMITS.maxClassTokens) break;
       continue;
     }
 
@@ -188,7 +363,7 @@ function splitClassName(className: string) {
     current += char;
   }
 
-  if (current) tokens.push(current);
+  if (current && tokens.length < SAFETY_LIMITS.maxClassTokens) tokens.push(current);
   return tokens;
 }
 
@@ -206,7 +381,7 @@ function stripVariants(className: string) {
   return lastVariantSeparator >= 0 ? className.slice(lastVariantSeparator + 1) : className;
 }
 
-function classConflictDiagnostic(group: ConflictGroup, classes: string[]): StyleDiagnostic {
+function classConflictDiagnostic(group: ConflictGroup): StyleDiagnostic {
   if (group.id === "width") {
     return {
       id: "class-conflict-width",
@@ -239,13 +414,14 @@ function classConflictDiagnostic(group: ConflictGroup, classes: string[]): Style
   };
 }
 
-function collectClassConflicts(tokens: string[]) {
+function collectClassConflicts(tokens: string[], skipGroupIds = new Set<string>()) {
   const diagnostics: StyleDiagnostic[] = [];
   const normalizedTokens = tokens.map(stripVariants);
 
   conflictGroups.forEach((group) => {
+    if (skipGroupIds.has(group.id)) return;
     const matches = Array.from(new Set(normalizedTokens.filter(group.matches)));
-    if (matches.length > 1) diagnostics.push(classConflictDiagnostic(group, matches));
+    if (matches.length > 1) diagnostics.push(classConflictDiagnostic(group));
   });
 
   return diagnostics;
@@ -256,16 +432,19 @@ function isTailwindUtilityValue(value: string, prefix: string) {
 }
 
 function isCssLengthValue(value: string) {
-  return /^-?(?:0|(?:\d+|\d*\.\d+)(?:px|rem|vh|vw|%|em))$/.test(value);
+  return /^-?(?:0|(?:\d+|\d*\.\d+)(?:px|rem|vh|vw|dvh|svh|lvh|vmin|vmax|%|em|ch))$/.test(value);
 }
 
 function isCssFunctionValue(value: string) {
   return /^(?:calc|clamp|min|max)\(.+\)$/.test(value);
 }
 
-function isValidAdvancedValue(value: string, prefix: string) {
+function isValidAdvancedValue(value: string, prefixes: string[], validLiterals?: Set<string>) {
   const trimmed = value.trim();
-  return trimmed === "auto" || isTailwindUtilityValue(trimmed, prefix) || isCssLengthValue(trimmed) || isCssFunctionValue(trimmed);
+  if (trimmed === "auto" || validLiterals?.has(trimmed) || isCssLengthValue(trimmed) || isCssFunctionValue(trimmed)) return true;
+
+  const tokens = splitClassName(trimmed).map(stripVariants);
+  return tokens.length > 0 && tokens.every((token) => prefixes.some((prefix) => isTailwindUtilityValue(token, prefix)));
 }
 
 function isValidGridColumnsValue(value: string) {
@@ -280,10 +459,11 @@ function isValidGridColumnsValue(value: string) {
 function collectRawValueDiagnostics(style: StyleConfig) {
   const diagnostics: StyleDiagnostic[] = [];
 
-  rawValueFields.forEach(({ field, prefix }) => {
+  rawValueFields.forEach(({ field, prefixes, validLiterals, suggestion }) => {
     const value = style[field];
     if (typeof value !== "string" || !value.trim()) return;
-    if (isValidAdvancedValue(value, prefix)) return;
+    const safeValue = normalizeCssLength(value);
+    if (!safeValue || isValidAdvancedValue(safeValue, prefixes, validLiterals)) return;
 
     diagnostics.push({
       id: `invalid-value-${field}`,
@@ -291,11 +471,12 @@ function collectRawValueDiagnostics(style: StyleConfig) {
       title: "Value may be invalid",
       message: "This value does not look like a Tailwind utility or a valid CSS length. It may not apply.",
       field,
-      suggestion: "Use a Tailwind utility like max-w-6xl or a CSS value like 1200px.",
+      suggestion,
     });
   });
 
-  if (style.gridColumns && !isValidGridColumnsValue(style.gridColumns)) {
+  const safeGridColumns = normalizeCssLength(style.gridColumns, SAFETY_LIMITS.gridColumns);
+  if (safeGridColumns && !isValidGridColumnsValue(safeGridColumns)) {
     diagnostics.push({
       id: "invalid-value-gridColumns",
       severity: "warning",
@@ -307,6 +488,308 @@ function collectRawValueDiagnostics(style: StyleConfig) {
   }
 
   return diagnostics;
+}
+
+function collectColorValueDiagnostics(style: StyleConfig) {
+  const diagnostics: StyleDiagnostic[] = [];
+  const fields: Array<{ field: "textColor" | "background" | "borderColor"; role: "text" | "background" | "border" }> = [
+    { field: "textColor", role: "text" },
+    { field: "background", role: "background" },
+    { field: "borderColor", role: "border" },
+  ];
+
+  fields.forEach(({ field, role }) => {
+    const value = style[field];
+    if (!hasValue(value) || isValidColorFieldValue(value, role)) return;
+
+    diagnostics.push({
+      id: `invalid-color-${field}`,
+      severity: "warning",
+      title: "Color value may be invalid",
+      message: "This value does not look like a Tailwind color utility or a valid CSS color.",
+      field,
+      suggestion: "Try text-slate-950, bg-white, #ffffff, rgb(...), or var(--color).",
+    });
+  });
+
+  return diagnostics;
+}
+
+function collectDedicatedColorConflicts(style: StyleConfig, customClassTokens: string[]) {
+  const diagnostics: StyleDiagnostic[] = [];
+  const skipGroupIds = new Set<string>();
+  const normalizedCustomTokens = customClassTokens.map(stripVariants);
+
+  if (hasValue(style.textColor) && normalizedCustomTokens.some(isTailwindTextColorClass)) {
+    skipGroupIds.add("textColor");
+    diagnostics.push({
+      id: "dedicated-custom-text-color-conflict",
+      severity: "warning",
+      title: "Conflicting text color",
+      message: "This element has a Text color value and also text color classes in Custom Tailwind classes. One of them may override the other.",
+      field: "textColor",
+      suggestion: "Keep text color in either the Text color field or Custom Tailwind classes, but not both.",
+    });
+  }
+
+  if (hasValue(style.background) && normalizedCustomTokens.some(isTailwindBackgroundClass)) {
+    skipGroupIds.add("background");
+    diagnostics.push({
+      id: "dedicated-custom-background-conflict",
+      severity: "warning",
+      title: "Conflicting background color",
+      message: "This element has a Background value and also background classes in Custom Tailwind classes. One of them may override the other.",
+      field: "background",
+      suggestion: "Keep background styling in either the Background field or Custom Tailwind classes.",
+    });
+  }
+
+  if (hasValue(style.borderColor) && normalizedCustomTokens.some(isTailwindBorderColorClass)) {
+    skipGroupIds.add("borderColor");
+    diagnostics.push({
+      id: "dedicated-custom-border-color-conflict",
+      severity: "warning",
+      title: "Conflicting border color",
+      message: "This element has a Border color value and also border color classes in Custom Tailwind classes.",
+      field: "borderColor",
+      suggestion: "Keep border color in either the Border color field or Custom Tailwind classes.",
+    });
+  }
+
+  return { diagnostics, skipGroupIds };
+}
+
+type DedicatedUtilityConflict = {
+  field: keyof StyleConfig;
+  groupId: string;
+  title: string;
+  message: string;
+  suggestion: string;
+  matches: (className: string) => boolean;
+};
+
+const dedicatedUtilityConflicts: DedicatedUtilityConflict[] = [
+  {
+    field: "width",
+    groupId: "width",
+    title: "Conflicting width values",
+    message: "This element has a Width value and also width classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep width in either the Width field or Custom Tailwind classes.",
+    matches: isTailwindWidthClass,
+  },
+  {
+    field: "minWidth",
+    groupId: "minWidth",
+    title: "Conflicting min-width values",
+    message: "This element has a Min width value and also min-width classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep min-width in either the Min width field or Custom Tailwind classes.",
+    matches: isTailwindMinWidthClass,
+  },
+  {
+    field: "maxWidth",
+    groupId: "maxWidth",
+    title: "Conflicting max-width values",
+    message: "This element has a Max width value and also max-width classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep max-width in either the Max width field or Custom Tailwind classes.",
+    matches: isTailwindMaxWidthClass,
+  },
+  {
+    field: "height",
+    groupId: "height",
+    title: "Conflicting height values",
+    message: "This element has a Height value and also height classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep height in either the Height field or Custom Tailwind classes.",
+    matches: isTailwindHeightClass,
+  },
+  {
+    field: "minHeight",
+    groupId: "minHeight",
+    title: "Conflicting min-height values",
+    message: "This element has a Min height value and also min-height classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep min-height in either the Min height field or Custom Tailwind classes.",
+    matches: isTailwindMinHeightClass,
+  },
+  {
+    field: "maxHeight",
+    groupId: "maxHeight",
+    title: "Conflicting max-height values",
+    message: "This element has a Max height value and also max-height classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep max-height in either the Max height field or Custom Tailwind classes.",
+    matches: isTailwindMaxHeightClass,
+  },
+  {
+    field: "padding",
+    groupId: "padding",
+    title: "Conflicting padding values",
+    message: "This element has a Padding value and also padding classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep padding in either the Padding field or Custom Tailwind classes.",
+    matches: isBasePaddingClass,
+  },
+  {
+    field: "paddingX",
+    groupId: "paddingX",
+    title: "Conflicting horizontal padding values",
+    message: "This element has a Padding X value and also horizontal padding classes in Custom Tailwind classes.",
+    suggestion: "Keep horizontal padding in either the Padding X field or Custom Tailwind classes.",
+    matches: isPaddingXClass,
+  },
+  {
+    field: "paddingY",
+    groupId: "paddingY",
+    title: "Conflicting vertical padding values",
+    message: "This element has a Padding Y value and also vertical padding classes in Custom Tailwind classes.",
+    suggestion: "Keep vertical padding in either the Padding Y field or Custom Tailwind classes.",
+    matches: isPaddingYClass,
+  },
+  {
+    field: "paddingTop",
+    groupId: "paddingTop",
+    title: "Conflicting top padding values",
+    message: "This element has a Padding top value and also top padding classes in Custom Tailwind classes.",
+    suggestion: "Keep top padding in either the Padding top field or Custom Tailwind classes.",
+    matches: isPaddingTopClass,
+  },
+  {
+    field: "paddingRight",
+    groupId: "paddingRight",
+    title: "Conflicting right padding values",
+    message: "This element has a Padding right value and also right padding classes in Custom Tailwind classes.",
+    suggestion: "Keep right padding in either the Padding right field or Custom Tailwind classes.",
+    matches: isPaddingRightClass,
+  },
+  {
+    field: "paddingBottom",
+    groupId: "paddingBottom",
+    title: "Conflicting bottom padding values",
+    message: "This element has a Padding bottom value and also bottom padding classes in Custom Tailwind classes.",
+    suggestion: "Keep bottom padding in either the Padding bottom field or Custom Tailwind classes.",
+    matches: isPaddingBottomClass,
+  },
+  {
+    field: "paddingLeft",
+    groupId: "paddingLeft",
+    title: "Conflicting left padding values",
+    message: "This element has a Padding left value and also left padding classes in Custom Tailwind classes.",
+    suggestion: "Keep left padding in either the Padding left field or Custom Tailwind classes.",
+    matches: isPaddingLeftClass,
+  },
+  {
+    field: "margin",
+    groupId: "margin",
+    title: "Conflicting margin values",
+    message: "This element has a Margin value and also margin classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep margin in either the Margin field or Custom Tailwind classes.",
+    matches: isBaseMarginClass,
+  },
+  {
+    field: "marginX",
+    groupId: "marginX",
+    title: "Conflicting horizontal margin values",
+    message: "This element has a Margin X value and also horizontal margin classes in Custom Tailwind classes.",
+    suggestion: "Keep horizontal margin in either the Margin X field or Custom Tailwind classes.",
+    matches: isMarginXClass,
+  },
+  {
+    field: "marginY",
+    groupId: "marginY",
+    title: "Conflicting vertical margin values",
+    message: "This element has a Margin Y value and also vertical margin classes in Custom Tailwind classes.",
+    suggestion: "Keep vertical margin in either the Margin Y field or Custom Tailwind classes.",
+    matches: isMarginYClass,
+  },
+  {
+    field: "marginTop",
+    groupId: "marginTop",
+    title: "Conflicting top margin values",
+    message: "This element has a Margin top value and also top margin classes in Custom Tailwind classes.",
+    suggestion: "Keep top margin in either the Margin top field or Custom Tailwind classes.",
+    matches: isMarginTopClass,
+  },
+  {
+    field: "marginRight",
+    groupId: "marginRight",
+    title: "Conflicting right margin values",
+    message: "This element has a Margin right value and also right margin classes in Custom Tailwind classes.",
+    suggestion: "Keep right margin in either the Margin right field or Custom Tailwind classes.",
+    matches: isMarginRightClass,
+  },
+  {
+    field: "marginBottom",
+    groupId: "marginBottom",
+    title: "Conflicting bottom margin values",
+    message: "This element has a Margin bottom value and also bottom margin classes in Custom Tailwind classes.",
+    suggestion: "Keep bottom margin in either the Margin bottom field or Custom Tailwind classes.",
+    matches: isMarginBottomClass,
+  },
+  {
+    field: "marginLeft",
+    groupId: "marginLeft",
+    title: "Conflicting left margin values",
+    message: "This element has a Margin left value and also left margin classes in Custom Tailwind classes.",
+    suggestion: "Keep left margin in either the Margin left field or Custom Tailwind classes.",
+    matches: isMarginLeftClass,
+  },
+  {
+    field: "gap",
+    groupId: "gap",
+    title: "Conflicting gap values",
+    message: "This element has a Gap value and also gap classes in Custom Tailwind classes. One of them may override the other.",
+    suggestion: "Keep gap in either the Gap field or Custom Tailwind classes.",
+    matches: isBaseGapClass,
+  },
+  {
+    field: "rowGap",
+    groupId: "rowGap",
+    title: "Conflicting row gap values",
+    message: "This element has a Row gap value and also row gap classes in Custom Tailwind classes.",
+    suggestion: "Keep row gap in either the Row gap field or Custom Tailwind classes.",
+    matches: isRowGapClass,
+  },
+  {
+    field: "columnGap",
+    groupId: "columnGap",
+    title: "Conflicting column gap values",
+    message: "This element has a Column gap value and also column gap classes in Custom Tailwind classes.",
+    suggestion: "Keep column gap in either the Column gap field or Custom Tailwind classes.",
+    matches: isColumnGapClass,
+  },
+];
+
+function collectDedicatedUtilityConflicts(style: StyleConfig, customClassTokens: string[]) {
+  const diagnostics: StyleDiagnostic[] = [];
+  const skipGroupIds = new Set<string>();
+  const normalizedCustomTokens = customClassTokens.map(stripVariants);
+
+  dedicatedUtilityConflicts.forEach((conflict) => {
+    const value = style[conflict.field];
+    if (typeof value !== "string" || !value.trim()) return;
+    if (!normalizedCustomTokens.some(conflict.matches)) return;
+
+    skipGroupIds.add(conflict.groupId);
+    diagnostics.push({
+      id: `dedicated-custom-${conflict.groupId}-conflict`,
+      severity: "warning",
+      title: conflict.title,
+      message: conflict.message,
+      field: conflict.field,
+      suggestion: conflict.suggestion,
+    });
+  });
+
+  return { diagnostics, skipGroupIds };
+}
+
+function limitDiagnostics(diagnostics: StyleDiagnostic[]) {
+  if (diagnostics.length <= SAFETY_LIMITS.diagnostics) return diagnostics;
+  return [
+    ...diagnostics.slice(0, SAFETY_LIMITS.diagnostics),
+    {
+      id: "diagnostics-hidden-for-performance",
+      severity: "info" as const,
+      title: "More diagnostics were hidden",
+      message: "More diagnostics were hidden to keep the editor responsive.",
+    },
+  ];
 }
 
 export function getStyleDiagnostics({
@@ -331,7 +814,7 @@ export function getStyleDiagnostics({
     hasValue(resolvedStyle.insetLeft) ||
     normalizedClassTokens.some((token) => /^-?(?:top|right|bottom|left)-.+/.test(token));
 
-  if (viewport !== "desktop" && node.styles[viewport] && Object.keys(node.styles[viewport] ?? {}).length > 0) {
+  if (viewport !== "desktop" && node.styles?.[viewport] && Object.keys(node.styles[viewport] ?? {}).length > 0) {
     diagnostics.push({
       id: "viewport-override-active",
       severity: "info",
@@ -341,7 +824,84 @@ export function getStyleDiagnostics({
     });
   }
 
-  diagnostics.push(...collectClassConflicts(classTokens));
+  const customClassTokens = splitClassName(resolvedStyle.customClassName ?? "");
+  if ((resolvedStyle.customClassName?.length ?? 0) >= SAFETY_LIMITS.customClassName || customClassTokens.length >= SAFETY_LIMITS.maxClassTokens) {
+    diagnostics.push({
+      id: "too-many-custom-classes",
+      severity: "warning",
+      title: "Custom classes were shortened",
+      message: "Custom classes were shortened to keep the editor responsive.",
+      field: "customClassName",
+      suggestion: "Remove unused classes or move repeated styles into fewer utilities.",
+    });
+  }
+
+  if (node.type === "link" && !node.props?.href?.trim()) {
+    diagnostics.push({
+      id: "link-without-href",
+      severity: "warning",
+      title: "Link href may be invalid",
+      message: "This link has no destination. Preview and export will use a safe # fallback.",
+      suggestion: "Set href to a URL, route, section id, or # placeholder.",
+    });
+  }
+
+  if (node.type === "link" && isProbablyDangerousUrl(node.props?.href)) {
+    diagnostics.push({
+      id: "dangerous-link-url",
+      severity: "warning",
+      title: "Invalid URL was replaced",
+      message: "This link uses a blocked URL protocol. Preview and export will use a safe fallback.",
+      suggestion: "Use #, a relative path, http(s), mailto, or tel.",
+    });
+  }
+
+  if (node.type === "image" && isProbablyDangerousUrl(node.props?.src)) {
+    diagnostics.push({
+      id: "dangerous-image-url",
+      severity: "warning",
+      title: "Invalid image URL was replaced",
+      message: "This image source uses a blocked URL protocol. Preview and export will ignore it.",
+      suggestion: "Use http(s), a relative path, or a safe data:image URL.",
+    });
+  }
+
+  if (node.type === "listItem" && parent?.type !== "list") {
+    diagnostics.push({
+      id: "list-item-outside-list",
+      severity: "info",
+      title: "List item outside a list",
+      message: "List item is usually used inside a list.",
+      suggestion: "Add it inside a List element when you want semantic ul/li markup.",
+    });
+  }
+
+  if ((node.type === "input" || node.type === "textarea") && parent?.type !== "form") {
+    diagnostics.push({
+      id: "field-outside-form",
+      severity: "info",
+      title: "Form field outside a form",
+      message: "Inputs can be used anywhere, but wrapping them in a form is recommended.",
+    });
+  }
+
+  const colorConflicts = collectDedicatedColorConflicts(resolvedStyle, customClassTokens);
+  const utilityConflicts = collectDedicatedUtilityConflicts(resolvedStyle, customClassTokens);
+  const skippedConflictGroups = new Set([...colorConflicts.skipGroupIds, ...utilityConflicts.skipGroupIds]);
+  diagnostics.push(...colorConflicts.diagnostics);
+  diagnostics.push(...utilityConflicts.diagnostics);
+  diagnostics.push(...collectClassConflicts(classTokens, skippedConflictGroups));
+
+  if (shouldFitFullWidthInsideHorizontalMargins(resolvedStyle)) {
+    diagnostics.push({
+      id: "full-width-with-horizontal-margin",
+      severity: "info",
+      title: "Full width with horizontal margin can overflow",
+      message: "A full-width element with left or right margin becomes wider than its parent in normal CSS.",
+      field: "width",
+      suggestion: "MotionForge auto-fits this combination in preview and export, but using parent padding is usually cleaner.",
+    });
+  }
 
   if ((!resolvedStyle.position || resolvedStyle.position === "static") && hasPositionOffset) {
     diagnostics.push({
@@ -423,6 +983,7 @@ export function getStyleDiagnostics({
   }
 
   diagnostics.push(...collectRawValueDiagnostics(resolvedStyle));
+  diagnostics.push(...collectColorValueDiagnostics(resolvedStyle));
 
-  return diagnostics;
+  return limitDiagnostics(diagnostics);
 }

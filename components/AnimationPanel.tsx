@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { AnimationConfig, ElementNode } from "@/lib/types";
 import { flattenTree } from "@/lib/treeUtils";
+import { clampNumber, clampOptionalNumber, clampString, safeScrollSceneHeightValue, safeScrollValue, SAFETY_LIMITS } from "@/lib/safety";
 import {
   animationModeOptions,
   animationTypeOptions,
@@ -51,7 +52,7 @@ function scrubValue(scrub: AnimationConfig["scrub"]) {
 function parseScrub(value: string): AnimationConfig["scrub"] {
   if (value === "off") return undefined;
   if (value === "true") return true;
-  return numberOrUndefined(value);
+  return clampOptionalNumber(value, 0, 10);
 }
 
 function SelectField({
@@ -81,10 +82,10 @@ function SelectField({
   );
 }
 
-function TextField({ label, value, placeholder, onChange }: { label: string; value?: string; placeholder?: string; onChange: (value: string) => void }) {
+function TextField({ label, value, placeholder, maxLength = SAFETY_LIMITS.animationString, onChange }: { label: string; value?: string; placeholder?: string; maxLength?: number; onChange: (value: string) => void }) {
   return (
     <Field label={label}>
-      <input className={inputClass} value={value ?? ""} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <input className={inputClass} value={value ?? ""} placeholder={placeholder} maxLength={maxLength} onChange={(event) => onChange(clampString(event.target.value, maxLength))} />
     </Field>
   );
 }
@@ -106,9 +107,31 @@ function NumberField({
   disabled?: boolean;
   onChange: (value: number | undefined) => void;
 }) {
+  const minNumber = min === undefined ? undefined : Number(min);
+  const maxNumber = max === undefined ? undefined : Number(max);
+  const safeValue =
+    value === undefined || minNumber === undefined || maxNumber === undefined
+      ? value
+      : clampNumber(value, minNumber, maxNumber, Math.max(minNumber, Math.min(maxNumber, 0)));
   return (
     <Field label={label}>
-      <input className={inputClass} disabled={disabled} type="number" min={min} max={max} step={step} value={value ?? ""} onChange={(event) => onChange(numberOrUndefined(event.target.value))} />
+      <input
+        className={inputClass}
+        disabled={disabled}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={safeValue ?? ""}
+        onChange={(event) => {
+          const next = numberOrUndefined(event.target.value);
+          if (next === undefined) {
+            onChange(undefined);
+            return;
+          }
+          onChange(minNumber !== undefined && maxNumber !== undefined ? clampNumber(next, minNumber, maxNumber, next) : next);
+        }}
+      />
     </Field>
   );
 }
@@ -122,8 +145,8 @@ function CheckboxField({ label, checked, onChange }: { label: string; checked?: 
   );
 }
 
-function emptyToUndefined(value: string) {
-  const trimmed = value.trim();
+function emptyToUndefined(value: string, maxLength = SAFETY_LIMITS.animationString) {
+  const trimmed = clampString(value, maxLength).trim();
   return trimmed ? trimmed : undefined;
 }
 
@@ -187,11 +210,11 @@ export function AnimationPanel({
             </div>
             <SelectField label="Trigger" value={animation.trigger} options={triggerOptions} onChange={(value) => onChange({ trigger: value as AnimationConfig["trigger"] })} />
             <div className={twoColumnClass}>
-              <NumberField label="Duration" min="0" step="0.1" value={animation.duration} onChange={(value) => onChange({ duration: value ?? 0 })} />
-              <NumberField label="Delay" min="0" step="0.05" value={animation.delay} onChange={(value) => onChange({ delay: value ?? 0 })} />
+              <NumberField label="Duration" min="0" max="30" step="0.1" value={animation.duration} onChange={(value) => onChange({ duration: value ?? 0 })} />
+              <NumberField label="Delay" min="0" max="30" step="0.05" value={animation.delay} onChange={(value) => onChange({ delay: value ?? 0 })} />
             </div>
             <SelectField label="Ease" value={animation.ease} options={easeOptions} onChange={(value) => onChange({ ease: value })} />
-            <NumberField label={`Stagger${hasChildren ? "" : " (no children)"}`} disabled={!hasChildren} min="0" step="0.01" value={animation.stagger ?? 0} onChange={(value) => onChange({ stagger: value ?? 0 })} />
+            <NumberField label={`Stagger${hasChildren ? "" : " (no children)"}`} disabled={!hasChildren} min="0" max="10" step="0.01" value={animation.stagger ?? 0} onChange={(value) => onChange({ stagger: value ?? 0 })} />
           </div>
         </details>
 
@@ -199,16 +222,16 @@ export function AnimationPanel({
           <summary className="cursor-pointer select-none text-sm font-semibold text-slate-950">Transform</summary>
           <div className="mt-3 grid min-w-0 gap-3">
             <div className={twoColumnClass}>
-              <NumberField label="X" step="1" value={animation.x} onChange={(value) => onChange({ x: value })} />
-              <NumberField label="Y" step="1" value={animation.y} onChange={(value) => onChange({ y: value })} />
+              <NumberField label="X" min="-5000" max="5000" step="1" value={animation.x} onChange={(value) => onChange({ x: value })} />
+              <NumberField label="Y" min="-5000" max="5000" step="1" value={animation.y} onChange={(value) => onChange({ y: value })} />
             </div>
             <div className={twoColumnClass}>
-              <NumberField label="Rotate" step="1" value={animation.rotate} onChange={(value) => onChange({ rotate: value })} />
-              <NumberField label="Scale" step="0.05" value={animation.scale} onChange={(value) => onChange({ scale: value })} />
+              <NumberField label="Rotate" min="-3600" max="3600" step="1" value={animation.rotate} onChange={(value) => onChange({ rotate: value })} />
+              <NumberField label="Scale" min="0" max="20" step="0.05" value={animation.scale} onChange={(value) => onChange({ scale: value })} />
             </div>
             <div className={twoColumnClass}>
               <NumberField label="Opacity from" min="0" max="1" step="0.05" value={animation.opacity} onChange={(value) => onChange({ opacity: value })} />
-              <NumberField label="Blur" min="0" step="1" value={animation.blur} onChange={(value) => onChange({ blur: value })} />
+              <NumberField label="Blur" min="0" max="100" step="1" value={animation.blur} onChange={(value) => onChange({ blur: value })} />
             </div>
             <SelectField label="Transform origin" value={animation.transformOrigin} options={transformOriginOptions} allowDefault onChange={(value) => onChange({ transformOrigin: value || undefined })} />
           </div>
@@ -217,7 +240,7 @@ export function AnimationPanel({
         <details className={detailsClass}>
           <summary className="cursor-pointer select-none text-sm font-semibold text-slate-950">Playback</summary>
           <div className="mt-3 grid min-w-0 gap-3">
-            <NumberField label="Repeat" step="1" value={animation.repeat} onChange={(value) => onChange({ repeat: value })} />
+            <NumberField label="Repeat" min="-1" max="100" step="1" value={animation.repeat} onChange={(value) => onChange({ repeat: value })} />
             <CheckboxField label="Yoyo" checked={animation.yoyo} onChange={(value) => onChange({ yoyo: value })} />
           </div>
         </details>
@@ -237,8 +260,8 @@ export function AnimationPanel({
                 <SelectField label="End" value={animation.scrollEnd} options={scrollEndOptions} allowDefault onChange={(value) => onChange({ scrollEnd: value || undefined })} />
               </div>
               <div className={twoColumnClass}>
-                <TextField label="Scroll distance" value={animation.scrollDistance} placeholder="800 or +=800" onChange={(value) => onChange({ scrollDistance: emptyToUndefined(value) })} />
-                <TextField label="Canvas scroll height" value={animation.scrollSceneHeight} placeholder="1600px or 200vh" onChange={(value) => onChange({ scrollSceneHeight: emptyToUndefined(value) })} />
+                <TextField label="Scroll distance" value={animation.scrollDistance} placeholder="800 or +=800" onChange={(value) => onChange({ scrollDistance: value.trim() ? safeScrollValue(value) : undefined })} />
+                <TextField label="Canvas scroll height" value={animation.scrollSceneHeight} placeholder="1600px or 200vh" onChange={(value) => onChange({ scrollSceneHeight: safeScrollSceneHeightValue(value) })} />
               </div>
               <div className={twoColumnClass}>
                 <SelectField label="Scrub" value={scrubValue(animation.scrub)} options={scrubOptions} onChange={(value) => onChange({ scrub: parseScrub(value) })} />
@@ -268,7 +291,13 @@ export function AnimationPanel({
                 <CheckboxField label="Fade" checked={animation.flipFade} onChange={(value) => onChange({ flipFade: value })} />
               </div>
               <Field label="Props">
-                <input className={inputClass} value={animation.flipProps ?? ""} placeholder="borderRadius,backgroundColor" onChange={(event) => onChange({ flipProps: event.target.value.trim() || undefined })} />
+                <input
+                  className={inputClass}
+                  value={animation.flipProps ?? ""}
+                  placeholder="borderRadius,backgroundColor"
+                  maxLength={SAFETY_LIMITS.animationString}
+                  onChange={(event) => onChange({ flipProps: emptyToUndefined(event.target.value) })}
+                />
               </Field>
               {(animation.flipPreset === "swap" || animation.flipPreset === "reorder") && (
                 <p className="text-xs leading-snug text-amber-700">Swap/reorder Flip presets require multi-element layout editing and will be expanded later.</p>
